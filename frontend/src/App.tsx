@@ -1,34 +1,32 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom"
+
+// pages
+import Login from "./pages/Login"
+import Central from "./pages/Central"
+import Paciente from "./pages/Paciente"
+import Agendamentos from "./pages/Agendamentos"
+import Perfil from "./pages/Perfil"
+import Ajuda from "./pages/Ajuda"
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <Router>
+      <Routes>
+        {/* redireciona / para /login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* rotas principais */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/central" element={<Central />} />
+        <Route path="/beneficiario" element={<Paciente />} />
+        <Route path="/agendamentos" element={<Agendamentos />} />
+        <Route path="/perfil" element={<Perfil />} />
+        <Route path="/ajuda" element={<Ajuda />} />
+
+        {/* rota coringa (404) */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </Router>
   )
 }
 
