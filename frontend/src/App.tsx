@@ -8,7 +8,6 @@ import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
 
 function App() {
-
   return (
         <Router>
           <Routes>
