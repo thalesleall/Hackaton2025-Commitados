@@ -1,8 +1,8 @@
-import { useState } from "react"
-import { Card, CardContent } from "../components/ui/card"
+import { useEffect, useState, useRef } from "react"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Paperclip } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 type Message = {
   sender: "user" | "bot"
@@ -14,6 +14,18 @@ export default function ChatBot({ onClose }: { onClose: () => void }) {
     { sender: "bot", text: "Olá 👋 Sou seu assistente Unimed. Como posso ajudar?" }
   ])
   const [input, setInput] = useState("")
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const token = "10" // localStorage.getItem("authToken")
+    const userId = "10" // localStorage.getItem("idUser")
+    return
+    if (token || userId) {
+      navigate("/login")
+      return
+    }
+  }, [])
 
   const handleSend = () => {
     if (!input.trim()) return
@@ -31,8 +43,21 @@ export default function ChatBot({ onClose }: { onClose: () => void }) {
     setInput("")
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0]
+      if (file.type === "application/pdf") {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "user", text: `📎 Enviou um arquivo: ${file.name}` }
+        ])
+      } else {
+        alert("Somente arquivos PDF são permitidos.")
+      }
+    }
+  }
+
   return (
-    // ⬇️ agora ocupa só o espaço disponível, sem overlay
     <div className="flex flex-col w-full h-full bg-white rounded-2xl shadow-sm">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between px-4 py-3 border-b shadow-sm bg-white rounded-t-2xl">
@@ -44,7 +69,6 @@ export default function ChatBot({ onClose }: { onClose: () => void }) {
           />
           <h2 className="font-semibold text-green-700">Nova Conversa</h2>
         </div>
-        <span className="text-xs text-gray-500">Beta</span>
       </div>
 
       {/* Histórico */}
@@ -64,7 +88,7 @@ export default function ChatBot({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Input fixo no rodapé */}
-      <div className="border-t p-3 flex gap-2 bg-white rounded-b-2xl">
+      <div className="border-t p-3 flex gap-2 bg-white rounded-b-2xl items-center">
         <Input
           placeholder="Digite sua mensagem..."
           value={input}
@@ -73,9 +97,27 @@ export default function ChatBot({ onClose }: { onClose: () => void }) {
           }
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
+
+        {/* Botão de anexar arquivo */}
+        <Button
+          variant="outline"
+          className="border-green-600 text-green-700"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip className="w-5 h-5" />
+        </Button>
+        <input
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+        />
+
+        {/* Botão de enviar */}
         <Button
           onClick={handleSend}
-          className="bg-green-600 hover:bg-green-700"
+          className="bg-green-600 hover:bg-green-700 text-white"
         >
           Enviar
         </Button>
