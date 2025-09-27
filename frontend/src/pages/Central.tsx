@@ -2,7 +2,8 @@ import { useState } from "react"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
 import { Card, CardContent } from "../components/ui/card"
-import { Home, User, Settings } from "lucide-react"
+import { Home, User, Settings, MessageSquarePlus } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 import ChatBot from "../components/chatbot"
 import { Dropdown } from "../components/DropDown"
 
@@ -42,6 +43,15 @@ export default function Central() {
       status: "Aguardando seu retorno",
       msg: "Cliente parou de responder. Reagendar contato manualmente."
     },
+    // 👇 Exemplo: várias conversas para forçar o scroll
+    ...Array.from({ length: 15 }, (_, i) => ({
+      id: i + 4,
+      nome: `Cliente ${i + 4}`,
+      protocolo: `#48${i + 100}`,
+      canal: "WhatsApp",
+      status: "Aguardando resposta",
+      msg: "Mensagem de teste para simular muitas conversas..."
+    }))
   ]
 
   const filteredChats = chats.filter(c =>
@@ -124,78 +134,110 @@ export default function Central() {
         </div>
       </header>
 
-      <main className="flex flex-1 p-6 gap-6">
-        {/* Sidebar - Ações rápidas */}
-        <aside className="w-64 bg-white shadow-sm rounded-2xl p-4 flex flex-col gap-3">
+      <main className="flex flex-1 p-6 gap-6 overflow-hidden">
+        {/* Sidebar - Ações rápidas (não ocupa altura total) */}
+        <aside className="w-64 bg-white shadow-sm rounded-2xl p-4 flex flex-col gap-3 self-start">
           <h2 className="font-semibold text-lg">Ações rápidas</h2>
-          <Button className="bg-green-600 hover:bg-green-700 text-white w-full">Encerrar atendimento</Button>
-          <Button variant="outline" className="border-green-600 text-green-700 w-full">Fazer manualmente</Button>
-          <Button variant="outline" className="border-green-600 text-green-700 w-full">Termo seguro</Button>
+          <Button className="bg-green-600 hover:bg-green-700 text-white w-full">
+            Encerrar atendimento
+          </Button>
+          <Button
+            variant="outline"
+            className="border-green-600 text-green-700 w-full"
+          >
+            Fazer manualmente
+          </Button>
           <p className="text-xs text-gray-500 mt-2">
-            Use as ações para finalizar, assumir manualmente ou enviar o termo.
+            Use as ações para finalizar ou assumir manualmente.
           </p>
         </aside>
 
         {/* Área principal */}
         <section className="flex-1 flex flex-col gap-4">
-          {!showChat ? (
-            <>
-              <Input
-                placeholder="Buscar conversa por nome, telefone ou protocolo..."
-                value={search}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                className="border-green-500"
-              />
+          <AnimatePresence mode="wait">
+            {!showChat ? (
+              <motion.div
+                key="conversations"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="flex flex-col gap-4 h-full"
+              >
+                <Input
+                  placeholder="Buscar conversa por nome, telefone ou protocolo..."
+                  value={search}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearch(e.target.value)
+                  }
+                  className="border-green-500"
+                />
 
-              {filteredChats.map((chat) => (
-                <Card
-                  key={chat.id}
-                  className={`hover:shadow-md transition cursor-pointer ${
-                    activeChat === chat.id ? "border-l-4 border-orange-500" : ""
-                  }`}
-                  onClick={() => {
-                    setActiveChat(chat.id)
-                    setShowChat(true)
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex justify-between items-center">
-                        <p className="font-semibold">
-                          {chat.nome} • Protocolo {chat.protocolo}
-                        </p>
-                        {activeChat === chat.id && (
-                          <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-md">
-                            Em andamento
+                {/* Conversas com scroll interno */}
+                <div className="flex-1 overflow-y-auto pr-2">
+                  {filteredChats.map((chat) => (
+                    <Card
+                      key={chat.id}
+                      className={`hover:shadow-md transition cursor-pointer ${
+                        activeChat === chat.id
+                          ? "border-l-4 border-orange-500"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setActiveChat(chat.id)
+                        setShowChat(true)
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <p className="font-semibold">
+                              {chat.nome} • Protocolo {chat.protocolo}
+                            </p>
+                            {activeChat === chat.id && (
+                              <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-md">
+                                Em andamento
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {chat.canal} • {chat.status}
                           </span>
-                        )}
-                      </div>
-                      <span className="text-sm text-gray-500">
-                        {chat.canal} • {chat.status}
-                      </span>
-                      <p className="text-sm mt-1">{chat.msg}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-
-              <div className="flex justify-center mt-6">
-                <Button
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => {
-                    setShowChat(true)
-                    setActiveChat(null)
-                  }}
-                >
-                  Iniciar nova conversa
-                </Button>
-              </div>
-            </>
-          ) : (
-            <ChatBot onClose={() => setShowChat(false)} />
-          )}
+                          <p className="text-sm mt-1">{chat.msg}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="chat"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 30 }}
+                transition={{ duration: 0.3 }}
+                className="flex-1"
+              >
+                <ChatBot onClose={() => setShowChat(false)} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
       </main>
+
+      {/* Floating Action Button */}
+      {!showChat && (
+        <button
+          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center shadow-lg"
+          onClick={() => {
+            setShowChat(true)
+            setActiveChat(null)
+          }}
+        >
+          <MessageSquarePlus className="text-white w-7 h-7" />
+        </button>
+      )}
 
       {/* Rodapé */}
       <footer className="text-center py-3 text-xs text-gray-500 border-t border-green-200">
