@@ -1,8 +1,8 @@
-export default function Central(){
+export default function central() {
+  
+  return (
+    <div>
 
-    return (
-        <div>
-            
-        </div>
-    )
+    </div>
+  )
 }

@@ -36,8 +36,9 @@ export default function Login() {
     try {
       const response = await LoginUsuario(email, senha)
 
-      if ("data" in response) {
-        localStorage.setItem("authToken", response.data)
+      if (response.data.user.id) {
+        localStorage.setItem("idUser", response.data.user.id )
+        localStorage.setItem("authToken", response.data.session.access_token )
         navigate("/home")
       } else {
         setErrorMessage(response.error.message || "Falha na autenticação.")
