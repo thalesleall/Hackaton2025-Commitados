@@ -1,12 +1,12 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Mail, Lock } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import Logo from "../assets/logo.png"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { LoginUsuario } from "@/service/api"
+import { LoginUsuario } from "../service/api"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Button } from "../components/ui/button"
+import { Label } from "../components/ui/label"
+import { Input } from "../components/ui/input"
 
 export default function Login() {
   const [email, setEmail] = useState<string>("")
