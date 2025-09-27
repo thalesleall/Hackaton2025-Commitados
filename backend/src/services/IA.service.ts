@@ -49,20 +49,66 @@ try {
  */
 export async function askHuggingFace(question: string, historicoMensagens?: Message[]): Promise<string> {
   try {
-    // Define as mensagens para a chamada da API
-    // Usando 'any[]' para a tipagem do array de mensagens,
-    // garantindo compatibilidade com a estrutura esperada pela API
-    // sem depender de um tipo exportado específico.
-    const messages: any[] = [ 
+    // Definir funções disponíveis para a IA
+    const functions = [
       {
-        role: "system", // Define o contexto institucional como instrução de sistema
-        content: contextoInstitucional,
+        name: "agendar_consulta",
+        description: "Agenda uma consulta médica quando o usuário quer marcar, agendar ou precisa de consulta",
+        parameters: {
+          type: "object",
+          properties: {
+            nome_paciente: { type: "string", description: "Nome completo do paciente" },
+            cpf_paciente: { type: "string", description: "CPF do paciente com 11 dígitos" },
+            especialidade: { type: "string", description: "Especialidade médica necessária" },
+            telefone: { type: "string", description: "Telefone do paciente (opcional)" }
+          },
+          required: ["nome_paciente", "cpf_paciente", "especialidade"]
+        }
+      },
+      {
+        name: "cancelar_consulta",
+        description: "Cancela uma consulta existente quando o usuário quer cancelar ou desmarcar",
+        parameters: {
+          type: "object",
+          properties: {
+            protocolo: { type: "string", description: "Protocolo da consulta (formato CON + 10 dígitos)" }
+          },
+          required: ["protocolo"]
+        }
+      },
+      {
+        name: "consultar_agendamentos",
+        description: "Busca consultas do paciente quando ele quer ver seus agendamentos",
+        parameters: {
+          type: "object",
+          properties: {
+            cpf_paciente: { type: "string", description: "CPF do paciente com 11 dígitos" }
+          },
+          required: ["cpf_paciente"]
+        }
       }
     ];
 
-    // Adiciona o histórico de mensagens anteriores se existir
+    // Define as mensagens para a chamada da API
+    const messages: any[] = [ 
+      {
+        role: "system",
+        content: `${contextoInstitucional}
+
+INSTRUÇÕES DE ANÁLISE:
+1. Analise a mensagem do usuário para identificar a intenção
+2. Extraia todas as informações disponíveis (nome, CPF, especialidade, protocolo)
+3. Se tiver dados suficientes, chame a função apropriada
+4. Se faltar dados essenciais, responda pedindo apenas o que falta
+
+IMPORTANTE: Sempre tente interpretar variações de linguagem e mapeie para as funções corretas.`
+      }
+    ];
+
+    // Adiciona apenas as 2 últimas mensagens do histórico (para evitar contexto excessivo)
     if (historicoMensagens && historicoMensagens.length > 0) {
-      for (const msg of historicoMensagens) {
+      const ultimasMensagens = historicoMensagens.slice(-2);
+      for (const msg of ultimasMensagens) {
         messages.push({
           role: msg.remetente === 'usuario' ? 'user' : 'assistant',
           content: msg.texto,
@@ -76,18 +122,35 @@ export async function askHuggingFace(question: string, historicoMensagens?: Mess
       content: question,
     });
 
-    // Faz a chamada ao endpoint de chat da Hugging Face
+    // Faz a chamada ao endpoint de chat da Hugging Face com function calling
     const chatCompletion = await client.chatCompletion({
-      provider: "fireworks-ai", // Provedor que hospeda o modelo
-      model: "meta-llama/Llama-3.1-8B-Instruct", // Modelo utilizado
+      provider: "fireworks-ai",
+      model: "meta-llama/Llama-3.1-8B-Instruct",
       messages: messages,
-      // Você pode adicionar mais opções aqui, como temperature, max_tokens, etc.
-      // temperature: 0.7,
-      // max_tokens: 150,
+      tools: functions.map(func => ({ type: "function", function: func })),
+      tool_choice: "auto", // Permite que a IA escolha quando usar funções
+      temperature: 0.3, // Menor temperatura para respostas mais consistentes
+      max_tokens: 200,
     });
 
-    // Retorna a resposta da IA (se existir), caso contrário "Sem resposta."
-    return chatCompletion.choices?.[0]?.message?.content || "Sem resposta.";
+    const response = chatCompletion.choices?.[0]?.message;
+
+    // Verificar se a IA quer usar uma função
+    if (response?.tool_calls && response.tool_calls.length > 0) {
+      const toolCall = response.tool_calls[0];
+      const functionName = toolCall.function?.name;
+      const functionArgs = JSON.parse(toolCall.function?.arguments || '{}');
+
+      // Retornar indicação de que deve usar função
+      return JSON.stringify({
+        useFunction: true,
+        functionName: functionName,
+        arguments: functionArgs
+      });
+    }
+
+    // Retorna a resposta normal da IA se não usar função
+    return response?.content || "Não entendi. Posso ajudar com agendamentos, cancelamentos ou consultas.";
   } catch (error) {
     // Em caso de erro, loga no console
     console.error("Erro ao fazer requisição chatCompletion para Hugging Face:", error);
