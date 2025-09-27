@@ -5,6 +5,7 @@ import Paciente from "./pages/Paciente";
 import Agendamentos from "./pages/Agendamentos";
 import Perfil from "./pages/Perfil";
 import Ajuda from "./pages/Ajuda";
+import NotFound from "./pages/NotFound";
 
 function App() {
 
@@ -19,6 +20,7 @@ function App() {
             <Route path="/agendamentos" element={<Agendamentos />} />
             <Route path="/perfil" element={<Perfil />} />
             <Route path="/ajuda" element={<Ajuda />} />
+            <Route path='*' element={<NotFound />} />
           </Routes>
         </Router>
   )
