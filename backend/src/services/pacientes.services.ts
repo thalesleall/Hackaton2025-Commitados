@@ -1,73 +1,65 @@
 // src/services/paciente.service.ts
-
+import { createClient } from '@supabase/supabase-js';
 import { Paciente } from '../models/Paciente.model';
 
-// --- Simulação do Banco de Dados (Repository) ---
-let dbPacientes: Paciente[] = [];
-let nextId = 1;
-// ------------------------------------------------
+const supabase = createClient(
+  process.env.SUPABASE_URL as string,
+  process.env.SUPABASE_ANON_KEY as string
+);
 
-/**
- * Service responsável pela lógica de negócio da entidade Paciente.
- * Em um projeto real, esta camada interagiria com o Repositório/ORM.
- */
+//  Service responsável pela lógica de negócio da entidade Paciente.*/
 export class PacienteService {
-
-    // Lógica para Criar Paciente
-    public criar(dados: Paciente): Paciente {
-        // Lógica de negócio: validar CPF, aplicar regras de nível de necessidade, etc.
-        if (!dados.nome || !dados.cpf) {
-            // Em um service real, lançaríamos uma exceção de negócio
-            throw new Error('Nome e CPF são obrigatórios.');
-        }
-
-        // Simulação de inserção no BD
-        const novoPaciente: Paciente = {
-            id_paciente: nextId++,
-            nome: dados.nome,
-            cpf: dados.cpf,
-            dataNascimento: dados.dataNascimento,
-            idNivelNecessidade: dados.idNivelNecessidade
-        };
-        
-        dbPacientes.push(novoPaciente);
-        return novoPaciente;
-    }
-
+    
     // Lógica para Listar Todos
-    public listarTodos(): Paciente[] {
-        // Lógica de negócio: aplicar paginação, filtros de segurança, etc.
-        return dbPacientes;
+    public async listarTodos(): Promise<Paciente[]> {
+        const { data, error } = await supabase
+            .from('pacientes')
+            .select('*');
+
+        if (error) {
+            throw new Error(`Erro ao buscar pacientes: ${error.message}`);
+        }
+        return data as Paciente[];
     }
 
     // Lógica para Buscar por ID
-    public buscarPorId(id: number): Paciente | undefined {
-        // Simulação de busca no BD
-        const paciente = dbPacientes.find(p => p.id_paciente === id);
-        return paciente;
+    public async buscarPorId(id: number): Promise<Paciente | null> {
+        const { data, error } = await supabase
+            .from('pacientes')
+            .select('*')
+            .eq('id_paciente', id)
+            .single();
+
+        if (error) {
+            throw new Error(`Erro ao buscar paciente: ${error.message}`);
+        }
+        return data as Paciente | null;
     }
 
     // Lógica para Atualizar
-    public atualizar(id: number, dados: Partial<Paciente>): Paciente | undefined {
-        const index = dbPacientes.findIndex(p => p.id_paciente === id);
-        
-        if (index === -1) {
-            return undefined; // Não encontrado
+    public async atualizar(id: number, dados: Partial<Paciente>): Promise<Paciente | null> {
+        const { data, error } = await supabase
+            .from('pacientes')
+            .update(dados)
+            .eq('id_paciente', id)
+            .select('*')
+            .single();
+
+        if (error) {
+            throw new Error(`Erro ao atualizar paciente: ${error.message}`);
         }
-
-        // Simulação de atualização no BD
-        dbPacientes[index] = { ...dbPacientes[index], ...dados, id_paciente: id };
-        
-        return dbPacientes[index];
+        return data as Paciente | null;
     }
-
     // Lógica para Deletar
-    public deletar(id: number): boolean {
-        const initialLength = dbPacientes.length;
-        
-        // Simulação de remoção no BD
-        dbPacientes = dbPacientes.filter(p => p.id_paciente !== id);
+    public async deletar(id: number): Promise<boolean> {
+        const { error } = await supabase
+            .from('pacientes')
+            .delete()
+            .eq('id_paciente', id);
 
-        return dbPacientes.length < initialLength; // Retorna true se algo foi deletado
+        if (error) {
+            throw new Error(`Erro ao deletar paciente: ${error.message}`);
+        }
+        return true;
     }
 }
