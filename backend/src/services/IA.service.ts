@@ -35,25 +35,158 @@ export class IaService {
   }
 
   /**
-   * Carrega o contexto institucional do arquivo de texto
-   * @returns Conteúdo do contexto institucional
+   * Carrega o contexto institucional do arquivo JSON
+   * @returns Conteúdo do contexto institucional formatado
    */
   private loadInstitutionalContext(): string {
-    const contextPath: string = path.join(__dirname, "..", "./learning/contexto.txt");
+    const contextPath: string = path.join(__dirname, "..", "./learning/contexto.json");
     
     try {
-      // Lê o arquivo "contexto.txt" que contém informações institucionais
-      // Esse conteúdo será enviado como "system prompt" para o modelo
-      const contexto = fs.readFileSync(contextPath, "utf-8");
-      console.log("Contexto institucional carregado com sucesso.");
-      return contexto;
+      // Lê o arquivo "contexto.json" que contém informações institucionais estruturadas
+      const contextoRaw = fs.readFileSync(contextPath, "utf-8");
+      const contextoJson = JSON.parse(contextoRaw);
+      
+      // Converte o JSON em texto estruturado para a IA
+      const contextoFormatado = this.formatContextForAI(contextoJson);
+      
+      console.log("Contexto institucional JSON carregado com sucesso.");
+      return contextoFormatado;
     } catch (error) {
-      console.error(`Erro ao ler o arquivo de contexto em ${contextPath}:`, error);
-      // Contexto padrão de fallback
-      const contextoFallback = "Você é um assistente prestativo especializado em atendimento médico e agendamentos.";
+      console.error(`Erro ao ler o arquivo de contexto JSON em ${contextPath}:`, error);
+      
+      // Contexto padrão de fallback mais robusto
+      const contextoFallback = `Você é um assistente especializado em atendimento de clínica médica.
+
+INFORMAÇÕES BÁSICAS:
+- Você trabalha para uma clínica de saúde
+- Pode ajudar com: agendamentos, dúvidas sobre procedimentos, orientações gerais
+- Sempre seja empático e profissional
+- Em caso de dúvidas específicas, oriente o paciente a entrar em contato diretamente
+
+IMPORTANTE:
+- Não forneça diagnósticos médicos
+- Não substitua consultas presenciais
+- Sempre priorize a segurança do paciente`;
+
       console.log("Usando contexto padrão de fallback.");
       return contextoFallback;
     }
+  }
+
+  /**
+   * Formata o contexto JSON em texto estruturado para a IA
+   */
+  private formatContextForAI(contextoJson: any): string {
+    const base = contextoJson.base_conhecimento;
+    
+    let contextoFormatado = `VOCÊ É UM ASSISTENTE ESPECIALIZADO EM ATENDIMENTO DE CLÍNICA MÉDICA
+
+=== OBJETIVO ===
+${base.introducao.objetivo}
+
+=== ATORES PRINCIPAIS ===`;
+
+    // Adiciona informações sobre beneficiários
+    if (base.atores.beneficiario) {
+      const beneficiario = base.atores.beneficiario;
+      contextoFormatado += `
+BENEFICIÁRIOS/PACIENTES:
+- Descrição: ${beneficiario.descricao}
+- Canais de atendimento: ${beneficiario.canais.join(', ')}
+- Tipos: ${beneficiario.tipos.join(', ')}`;
+    }
+
+    // Adiciona informações sobre atendimento
+    if (base.atores.atendimento) {
+      const atendimento = base.atores.atendimento;
+      contextoFormatado += `
+
+PROTOCOLO DE ATENDIMENTO:
+- Sempre manter: ${atendimento.protocolos.join(', ')}
+- Canais disponíveis: ${atendimento.canais.join(', ')}`;
+    }
+
+    contextoFormatado += `
+
+=== PRINCIPAIS PROCESSOS QUE VOCÊ PODE AJUDAR ===`;
+
+    // Adiciona processos principais
+    if (base.processos) {
+      Object.keys(base.processos).forEach(processo => {
+        const proc = base.processos[processo];
+        const nomeFormatado = processo.replace(/_/g, ' ').toUpperCase();
+        
+        contextoFormatado += `
+
+${nomeFormatado}:`;
+        
+        if (proc.dados_referencia) {
+          const dados = proc.dados_referencia;
+          if (dados.campos_obrigatorios) {
+            contextoFormatado += `
+- Campos obrigatórios: ${dados.campos_obrigatorios.join(', ')}`;
+          }
+          if (dados.canais) {
+            contextoFormatado += `
+- Canais disponíveis: ${dados.canais.join(', ')}`;
+          }
+          if (dados.tempo_medio) {
+            contextoFormatado += `
+- Tempo médio: ${dados.tempo_medio}`;
+          }
+        }
+        
+        if (proc.exemplos && proc.exemplos.length > 0) {
+          contextoFormatado += `
+- Exemplos: ${proc.exemplos.join(' | ')}`;
+        }
+      });
+    }
+
+    // Adiciona glossário
+    if (base.glossario) {
+      contextoFormatado += `
+
+=== GLOSSÁRIO IMPORTANTE ===`;
+      Object.keys(base.glossario).forEach(termo => {
+        contextoFormatado += `
+- ${termo}: ${base.glossario[termo]}`;
+      });
+    }
+
+    // Adiciona siglas/abreviações
+    if (base.abrev_siglas) {
+      contextoFormatado += `
+
+=== SIGLAS E ABREVIAÇÕES ===`;
+      Object.keys(base.abrev_siglas).forEach(sigla => {
+        contextoFormatado += `
+- ${sigla}: ${base.abrev_siglas[sigla]}`;
+      });
+    }
+
+    // Adiciona observações importantes para IA
+    if (base.observacoes_ia) {
+      contextoFormatado += `
+
+=== DIRETRIZES IMPORTANTES PARA SUAS RESPOSTAS ===`;
+      base.observacoes_ia.forEach((obs: string, index: number) => {
+        contextoFormatado += `
+${index + 1}. ${obs}`;
+      });
+    }
+
+    contextoFormatado += `
+
+=== INSTRUÇÕES FINAIS ===
+- Sempre seja empático e profissional
+- Use as informações do contexto para dar respostas precisas
+- Se não souber algo específico, oriente o paciente a entrar em contato direto
+- Nunca forneça diagnósticos médicos - apenas orientações gerais
+- Sempre priorize a segurança e bem-estar do paciente
+- Use linguagem clara e acessível`;
+
+    return contextoFormatado;
   }
 
   /**
