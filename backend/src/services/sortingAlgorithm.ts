@@ -13,7 +13,7 @@ const TABLE_NAME = process.env.TABLE_NAME || 'public.rol_procedimentos'
 // =========================
 // Pool (lazy) com resolução IPv4
 // =========================
-type PgCfg = { host: string; port: number; database: string; user: string; password: string }
+export type PgCfg = { host: string; port: number; database: string; user: string; password: string }
 
 function safeParseDbUrl(urlStr?: string): Partial<PgCfg> {
   if (!urlStr) return {}
@@ -123,7 +123,7 @@ export type TopHit = {
 }
 
 // =========================
-// Busca - lista completa
+// Busca - lista completa (mantida recebendo string única)
 // =========================
 export async function searchProcedimentos(phrase: string, limit = 20): Promise<Hit[]> {
   const q = phrase?.trim()
@@ -254,11 +254,14 @@ export async function searchProcedimentos(phrase: string, limit = 20): Promise<H
 }
 
 // =========================
-// Busca - TOP 1 (valor, score, auditoria)
+// Busca - TOP 1 (AGORA aceita string | string[] e retorna o MAIOR score entre TODAS as frases)
 // =========================
-export async function searchProcedimentoTop(phrase: string): Promise<TopHit | null> {
-  const q = phrase?.trim()
-  if (!q) return null
+export async function searchProcedimentoTop(phrases: string | string[]): Promise<TopHit | null> {
+  const arr = (Array.isArray(phrases) ? phrases : [phrases])
+    .map((s) => s?.trim())
+    .filter((s): s is string => !!s && s.length > 0)
+
+  if (arr.length === 0) return null
 
   const pool = await getPool()
   const client = await pool.connect()
@@ -268,8 +271,11 @@ export async function searchProcedimentoTop(phrase: string): Promise<TopHit | nu
     const { rows } = await client.query<TopHit>(
       `
       with norm as (
-        select unaccent(lower($1)) as qn,
-               websearch_to_tsquery('portuguese', $1) as tsq
+        -- Normaliza todas as frases fornecidas
+        select q as phrase,
+               unaccent(lower(q)) as qn,
+               websearch_to_tsquery('portuguese', q) as tsq
+        from unnest($1::text[]) as q
       ),
       base as (
         select
@@ -289,62 +295,67 @@ export async function searchProcedimentoTop(phrase: string): Promise<TopHit | nu
         from ${TABLE_NAME} p
       ),
       scores as (
-        -- procedimento
+        -- procedimento (para cada frase candidata)
         select
           b.procedimento as valor,
           greatest(
-            similarity(unaccent(lower(b.procedimento)), (select qn from norm)),
-            0.2 * ts_rank(b.tsv, (select tsq from norm))
+            similarity(unaccent(lower(b.procedimento)), n.qn),
+            0.2 * ts_rank(b.tsv, n.tsq)
           ) as score,
           b.auditoria
         from base b
+        cross join norm n
         where b.procedimento is not null
           and (
-            unaccent(lower(b.procedimento)) % (select qn from norm)
-            or b.tsv @@ (select tsq from norm)
+            unaccent(lower(b.procedimento)) % n.qn
+            or b.tsv @@ n.tsq
           )
         union all
         -- terminologia_tab22
         select
           b.terminologia_tab22 as valor,
           greatest(
-            similarity(unaccent(lower(b.terminologia_tab22)), (select qn from norm)),
-            0.2 * ts_rank(b.tsv, (select tsq from norm))
+            similarity(unaccent(lower(b.terminologia_tab22)), n.qn),
+            0.2 * ts_rank(b.tsv, n.tsq)
           ) as score,
           b.auditoria
         from base b
+        cross join norm n
         where b.terminologia_tab22 is not null
           and (
-            unaccent(lower(b.terminologia_tab22)) % (select qn from norm)
-            or b.tsv @@ (select tsq from norm)
+            unaccent(lower(b.terminologia_tab22)) % n.qn
+            or b.tsv @@ n.tsq
           )
         union all
         -- subgrupo
         select
           b.subgrupo as valor,
-          similarity(unaccent(lower(b.subgrupo)), (select qn from norm)) as score,
+          similarity(unaccent(lower(b.subgrupo)), n.qn) as score,
           b.auditoria
         from base b
+        cross join norm n
         where b.subgrupo is not null
-          and unaccent(lower(b.subgrupo)) % (select qn from norm)
+          and unaccent(lower(b.subgrupo)) % n.qn
         union all
         -- grupo
         select
           b.grupo as valor,
-          similarity(unaccent(lower(b.grupo)), (select qn from norm)) as score,
+          similarity(unaccent(lower(b.grupo)), n.qn) as score,
           b.auditoria
         from base b
+        cross join norm n
         where b.grupo is not null
-          and unaccent(lower(b.grupo)) % (select qn from norm)
+          and unaccent(lower(b.grupo)) % n.qn
         union all
         -- capitulo
         select
           b.capitulo as valor,
-          similarity(unaccent(lower(b.capitulo)), (select qn from norm)) as score,
+          similarity(unaccent(lower(b.capitulo)), n.qn) as score,
           b.auditoria
         from base b
+        cross join norm n
         where b.capitulo is not null
-          and unaccent(lower(b.capitulo)) % (select qn from norm)
+          and unaccent(lower(b.capitulo)) % n.qn
       )
       select valor, score, auditoria
       from scores
@@ -352,7 +363,7 @@ export async function searchProcedimentoTop(phrase: string): Promise<TopHit | nu
       order by score desc
       limit 1;
       `,
-      [q]
+      [arr]
     )
 
     return rows[0] ?? null
@@ -365,3 +376,18 @@ export async function closePool() {
   const p = await getPool()
   await p.end()
 }
+
+/*
+USO RÁPIDO:
+
+// Top 1 para UMA frase (mantido)
+await searchProcedimentoTop('ressonância magnética joelho')
+
+// Top 1 entre VÁRIAS frases (NOVIDADE)
+await searchProcedimentoTop([
+  'ressonancia do joelho',
+  'RM genicular',
+  'ressonância magnética do joelho sem contraste'
+])
+
+*/

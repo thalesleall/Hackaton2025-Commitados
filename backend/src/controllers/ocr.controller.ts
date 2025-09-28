@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { extractTextFromPdf } from '../services/ocr.service'
+import { searchProcedimentoTop } from '../services/sortingAlgorithm'
 
 export async function ocrPdfController(req: Request, res: Response, next: NextFunction) {
   try {
@@ -12,7 +13,9 @@ export async function ocrPdfController(req: Request, res: Response, next: NextFu
     const dpi = req.query.dpi ? Number(req.query.dpi) : undefined
 
     const result = await extractTextFromPdf(file.path, { lang, dpi })
-    return res.json(result)
+
+    const response = await  searchProcedimentoTop(result.text.split('\n'))
+    return res.json(response)
   } catch (err) {
     next(err)
   }
