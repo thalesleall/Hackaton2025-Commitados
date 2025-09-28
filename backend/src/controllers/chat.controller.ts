@@ -1,51 +1,56 @@
 // src/controllers/chat.controller.ts
 
 import { Request, Response } from 'express';
-import { MenuChatService } from '../services/menu-chat.service';
+import { ChatService } from '../services/chat.service';
+import { DatabaseService } from '../services/database.service'; // Para a rota de debug
 
 export class ChatController {
-  private menuChatService: MenuChatService;
+  private chatService: ChatService;
+  private databaseService: DatabaseService; // Apenas para a rota de debug/listar conversas
 
-  constructor() {
-    this.menuChatService = new MenuChatService();
+  constructor(chatService: ChatService, databaseService: DatabaseService) {
+    this.chatService = chatService;
+    this.databaseService = databaseService;
   }
 
   /**
-   * ENDPOINT ÚNICO - Processa qualquer mensagem de texto
-   * A primeira mensagem inicia automaticamente a conversa
-   * Digitar "0" a qualquer momento volta ao menu principal
-   * POST /chat/message
+   * Endpoint POST /chat/message
+   * Recebe a mensagem do usuário, processa com o ChatService e retorna a resposta da IA.
    */
-  public async processMessage(req: Request, res: Response): Promise<void> {
+  public async handleUserMessage(req: Request, res: Response): Promise<void> {
+    const { userId, message } = req.body;
+
+    if (!userId || !message) {
+      res.status(400).json({ error: 'userId e message são obrigatórios.' });
+      return;
+    }
+
     try {
-      const { idUsuario, mensagem } = req.body;
+      const iaResponse = await this.chatService.processUserMessage(userId, message);
+      res.json({ reply: iaResponse });
+    } catch (error: any) {
+      console.error('Erro no controller handleUserMessage:', error);
+      res.status(500).json({ error: error.message || 'Erro interno do servidor.' });
+    }
+  }
 
-      // Validação dos parâmetros obrigatórios
-      if (!idUsuario || mensagem === undefined || mensagem === null) {
-        res.status(400).json({ 
-          sucesso: false,
-          erro: 'idUsuario e mensagem são obrigatórios' 
-        });
-        return;
+  /**
+   * Endpoint GET /chat/conversations/:userId
+   * Retorna a conversa mais recente de um usuário (para debug/histórico).
+   */
+  public async getLatestConversation(req: Request, res: Response): Promise<void> {
+    const { userId } = req.params;
+
+    try {
+      const conversation = await this.databaseService.findLatestConversationByUserId(userId);
+      if (conversation) {
+        res.json(conversation);
+      } else {
+        res.status(404).json({ message: 'Nenhuma conversa encontrada para este usuário.' });
       }
-
-      // Processa a mensagem através do MenuChatService
-      // Se for a primeira mensagem, inicia automaticamente a conversa
-      const resposta = await this.menuChatService.processarMensagem(idUsuario, mensagem.toString().trim());
-
-      res.status(200).json({
-        sucesso: true,
-        resposta: resposta,
-        timestamp: new Date().toISOString()
-      });
-
-    } catch (error) {
-      console.error('[ChatController] Erro ao processar mensagem:', error);
-      res.status(500).json({ 
-        sucesso: false,
-        erro: 'Desculpe, ocorreu um erro. Tente novamente ou digite 0 para voltar ao menu.',
-        detalhes: error instanceof Error ? error.message : 'Erro desconhecido'
-      });
+    } catch (error: any) {
+      console.error('Erro no controller getLatestConversation:', error);
+      res.status(500).json({ error: error.message || 'Erro interno do servidor.' });
     }
   }
 }
