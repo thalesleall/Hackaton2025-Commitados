@@ -3,12 +3,7 @@ import { Mail, Lock } from "lucide-react"
 import Logo from "../assets/logo.png"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { LoginUsuario } from "../service/api"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
-import { Button } from "../components/ui/button"
-import { Label } from "../components/ui/label"
-import { Input } from "../components/ui/input"
-import { LoginUsuario } from "../service/api"
+import { loginUsuario } from "../service/api"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Label } from "../components/ui/label"
@@ -40,8 +35,8 @@ export default function Login() {
     }
 
     try {
-      // Passando objeto { email, senha }
-      const response = await LoginUsuario({ email, senha })
+      const objeto = { email, senha }
+      const response = await loginUsuario(objeto.email, objeto.senha)
 
       if (response?.user?.id) {
         // Salva dados no localStorage

@@ -1,85 +1,77 @@
-// src/service/api.ts
-import { api } from "../utils"
+import axios from 'axios';
+import { api } from '../utils';
 
-/** Normaliza o ID da conversa vindo do backend */
-function normalizeConversationId(resp: any): string | null {
-  return (
-    resp?.id ??
-    resp?.id_conversa ??
-    resp?.conversationId ??
-    resp?.data?.id ??
-    resp?.data?.id_conversa ??
-    null
-  )
+const API_BASE = "http://localhost:3000/api/chat"; // ajuste se a porta for outra
+
+export interface Message {
+  sender: "user" | "bot";
+  text: string;
 }
 
-
-
-/** Login de usuário */
-/** Login de usuário */
-export async function LoginUsuario(payload: { email: string; senha: string }) {
-  const res = await api.post("/api/auth/login", {
-    email: payload.email,
-    password: payload.senha, // 👈 mapeia corretamente
-  })
-  return res.data
+export interface Conversation {
+  id: string;
+  titulo: string;
+  total_messages: number;
+  last_updated: string;
 }
 
-/** Criar uma nova conversa para o usuário */
-export async function CriarConversa(userId: string): Promise<{ id: string }> {
-  const res = await api.post(`/api/chat/conversations/${userId}`)
-  const id = normalizeConversationId(res.data)
-  if (!id) {
-    console.error("⚠️ Resposta ao criar conversa não contém ID:", res.data)
-    throw new Error("Conversa sem ID")
-  }
-  return { id }
-}
+export const loginUsuario = async (email: string, password: string) => {
+  const res = await api.post("/api/auth/login", { email, password });
+  return res.data; // geralmente retorna token e dados do usuário
+};
 
-/** Carregar todas conversas de um usuário */
-export async function CarregarConversas(userId: string) {
-  const res = await api.get(`/api/chat/conversations/${userId}`)
-  return res.data
-}
+export const getProfile = async () => {
+  const res = await api.get("/api/auth/profile");
+  return res.data;
+};
 
-/** Buscar conversa específica por ID (retorna mensagens normalizadas) */
-export async function BuscarConversaPorId(conversationId: string): Promise<
-  Array<{ sender: "user" | "bot"; text: string }>
-> {
-  const res = await api.get(`/api/chat/${conversationId}`)
+export const sendMessage = async (id_usuario: string, message: { text: string }) => {
+  const res = await api.post("/api/chat/message", { id_usuario, message: message.text });
+  return res.data;
+};
 
-  // Normalização das mensagens vindas do backend
-  const raw =
-    res.data?.mensagens ??
-    res.data?.messages ??
-    (Array.isArray(res.data) ? res.data : [])
+export const sendMessageSimple = async (message: string) => {
+  const res = await api.post("/api/chat/message-simple", { message });
+  return res.data;
+};
 
-  const msgs: Array<{ sender: "user" | "bot"; text: string }> = raw.map(
-    (m: any) => ({
-      sender: m?.origem === "user" ? "user" : "bot",
-      text: m?.texto ?? m?.text ?? "",
-    })
-  )
+export const getConversation = async (conversationId: string) => {
+  const res = await api.get(`/api/chat/conversation/${conversationId}`);
+  return res.data;
+};
 
-  return msgs
-}
+export const getConversations = async (userId: string) => {
+  const res = await api.get(`/api/chat/conversations/${userId}`);
+  return res.data?.conversations || [];
+};
 
-/** Enviar mensagem dentro de uma conversa */
-export async function EnviarMensagem(
-  conversationId: string,
-  payload: { texto: string; origem: "user" | "bot" }
-) {
-  const res = await api.post(`/api/chat/${conversationId}/mensagens`, payload)
-  return res.data
-}
+export const extractTextFromPDF = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await api.post("/api/ocr/extract-text", formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return res.data;
+};
 
-/** Enviar documento parseado via OCR */
-export async function enviarDocumentoParseado(payload: {
-  text: string
-  dict: Record<string, string>
-  pages: number
-  filename: string
-}) {
-  const res = await api.post("/api/ocr/ingest", payload)
-  return res.data
-}
+export const CarregarConversas = async (userId: string) => {
+  return await getConversations(userId);
+};
+
+export const closeActiveConversations = async (userId: string) => {
+  const res = await api.post("/api/chat/close-active-conversations", { id_usuario: userId });
+  return res.data;
+};
+
+export const createNewConversation = async (userId: string) => {
+  const res = await api.post("/api/chat/nova-conversa", { id_usuario: userId });
+  return res.data;
+};
+
+export const CriarConversa = async (userId: string) => {
+  // Criar uma nova conversa (pode usar sendMessageSimple para iniciar)
+  const res = await sendMessageSimple("Nova conversa iniciada");
+  return res;
+};
+
+ 
