@@ -59,7 +59,7 @@ export class IaService {
 
 INFORMAÇÕES BÁSICAS:
 - Você trabalha para uma clínica de saúde
-- Pode ajudar com: agendamentos, dúvidas sobre procedimentos, orientações gerais
+- Pode ajudar com: dúvidas sobre procedimentos, orientações gerais
 - Sempre seja empático e profissional
 - Em caso de dúvidas específicas, oriente o paciente a entrar em contato diretamente
 

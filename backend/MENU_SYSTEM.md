@@ -22,7 +22,7 @@ Digite o número da opção desejada ou 0 para voltar ao menu."
 ### **2. Navegação por Números**
 ```
 Usuário: "1"  →  Ativa Modo IA
-Usuário: "2"  →  Sistema de Agendamento  
+Usuário: "2"  →  Agendamento (Em desenvolvimento)  
 Usuário: "3"  →  Sistema de Autorização
 Usuário: "0"  →  Volta ao Menu Principal (de qualquer lugar)
 ```
@@ -43,7 +43,7 @@ Bot: [Resposta da IA + "Digite 0 para voltar ao menu"]
 Usuário: "2"
 ↓
 Bot: "📅 Agendamento de Consulta
-Em breve você será direcionado...
+🚧 Funcionalidade em desenvolvimento.
 Digite 0 para voltar ao menu principal."
 ```
 
@@ -136,7 +136,6 @@ console.log(data.reply); // Resposta da IA
 ### **Estados do Menu:**
 - `menu`: Menu principal
 - `ia_mode`: Modo IA ativado  
-- `agendar_consulta`: Sistema de agendamento
 - `autorizar_exame`: Sistema de autorização
 
 ### **Filtros Inteligentes:**
