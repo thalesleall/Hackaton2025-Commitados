@@ -3,17 +3,20 @@
 import { IaService } from './IA.service';
 import { DatabaseService } from './database.service';
 import { AutorizacaoService } from './autorizacao.service';
+import { AgendamentoSimplesService, AgendamentoStep } from './agendamento-simples.service';
 import { Message, Conversation } from '../models/conversation.model';
 
 export class ChatService {
   private autorizacaoService: AutorizacaoService;
+  private agendamentoService: AgendamentoSimplesService;
 
   constructor(
     private iaService: IaService,
     private databaseService?: DatabaseService
   ) {
     this.autorizacaoService = new AutorizacaoService();
-    console.log('ChatService inicializado com serviço de autorização.');
+    this.agendamentoService = new AgendamentoSimplesService();
+    console.log('ChatService inicializado com serviços de autorização e agendamento.');
   }
 
   /**
@@ -98,6 +101,11 @@ export class ChatService {
     else if (conversation.menu_state === 'ia_mode') {
       console.log('[ChatService] Processando no modo IA');
       respostaChatbot = await this.processIAMode(mensagemDoUsuario, conversation);
+    }
+    // PRIORIDADE 3: Agendamento
+    else if (conversation.menu_state === 'agendamento') {
+      console.log('[ChatService] Processando agendamento');
+      respostaChatbot = await this.processAgendamento(mensagemDoUsuario, conversation);
     }
     // PRIORIDADE 4: Outros menus (ex: autorização de exame)
     else if (conversation.menu_state === 'autorizar_exame') {
@@ -293,12 +301,22 @@ Digite o número da opção desejada ou 0 para voltar ao menu.
 Digite sua pergunta ou 0 para voltar ao menu.`;
       
       case '2':
-        console.log('[ChatService] Opção 2 selecionada - Agendamento em desenvolvimento');
-        return `📅 **Agendamento de Consulta**
+        console.log('[ChatService] Ativando modo agendamento');
+        conversation.menu_state = 'agendamento';
+        conversation.agendamento_step = { step: 'ESPECIALIDADE' };
+        
+        // Iniciar fluxo de agendamento
+        const iniciarAgendamento = await this.agendamentoService.processarAgendamento(
+          conversation.agendamento_step, 
+          ''
+        );
+        
+        conversation.agendamento_step = iniciarAgendamento.nextStep;
+        
+        return `${iniciarAgendamento.message}
 
-🚧 Funcionalidade em desenvolvimento.
-
-Digite 0 para voltar ao menu principal.`;
+---
+💡 Digite 0 a qualquer momento para voltar ao menu principal.`;
 
       case '3':
         console.log('[ChatService] Ativando modo autorização de exame');
@@ -335,6 +353,48 @@ ${this.getMainMenu()}`;
       console.error('[ChatService] Erro ao processar IA:', error);
       conversation.menu_state = 'menu';
       return `❌ Desculpe, ocorreu um erro ao processar sua pergunta. Retornando ao menu principal.
+
+${this.getMainMenu()}`;
+    }
+  }
+
+  /**
+   * Processa agendamento de consulta
+   */
+  private async processAgendamento(mensagemDoUsuario: string, conversation: Conversation): Promise<string> {
+    console.log('[ChatService] Processando agendamento');
+    
+    try {
+      // Verificar se há step de agendamento
+      if (!conversation.agendamento_step) {
+        conversation.agendamento_step = { step: 'ESPECIALIDADE' };
+      }
+
+      // Processar com o serviço de agendamento
+      const resultado = await this.agendamentoService.processarAgendamento(
+        conversation.agendamento_step,
+        mensagemDoUsuario
+      );
+
+      // Atualizar o step na conversa
+      conversation.agendamento_step = resultado.nextStep;
+
+      // Se completou o agendamento, voltar ao menu
+      if (resultado.message.includes('AGENDAMENTO CONFIRMADO') || resultado.message.includes('Agendamento cancelado')) {
+        conversation.menu_state = 'menu';
+        conversation.agendamento_step = undefined;
+      }
+
+      return `${resultado.message}
+
+---
+💡 Digite 0 a qualquer momento para voltar ao menu principal.`;
+
+    } catch (error) {
+      console.error('[ChatService] Erro ao processar agendamento:', error);
+      conversation.menu_state = 'menu';
+      conversation.agendamento_step = undefined;
+      return `❌ Desculpe, ocorreu um erro ao processar o agendamento. Retornando ao menu principal.
 
 ${this.getMainMenu()}`;
     }
@@ -384,7 +444,7 @@ Digite 0 para voltar ao menu principal.`;
     });
   }
 
-  private determineMenuState(conversation: Conversation): 'menu' | 'ia_mode' | 'autorizar_exame' {
+  private determineMenuState(conversation: Conversation): 'menu' | 'ia_mode' | 'autorizar_exame' | 'agendamento' {
     const mensagens = conversation.mensagens || [];
     
     // Se não há mensagens, inicia no menu
@@ -407,13 +467,24 @@ Digite 0 para voltar ao menu principal.`;
         return 'ia_mode';
       }
       
-      // 2. AUTORIZAÇÃO
+      // 2. AGENDAMENTO
+      if (texto.includes('agendamento de consulta') || 
+          texto.includes('especialidades disponíveis') ||
+          texto.includes('médicos disponíveis') ||
+          texto.includes('horários disponíveis') ||
+          texto.includes('dados do paciente') ||
+          texto.includes('confirmação do agendamento')) {
+        console.log('[ChatService] Estado detectado: agendamento');
+        return 'agendamento';
+      }
+      
+      // 3. AUTORIZAÇÃO
       if (texto.includes('autorização de exame')) {
         console.log('[ChatService] Estado detectado: autorizar_exame');
         return 'autorizar_exame';
       }
       
-      // 3. MENU PRINCIPAL
+      // 4. MENU PRINCIPAL
       if (texto.includes('como posso ajudá-lo hoje') || 
           texto.includes('opção inválida') ||
           texto.includes('digite o número da opção desejada')) {

@@ -1,3 +1,5 @@
+import { AgendamentoStep } from '../services/agendamento-simples.service';
+
 export interface Message {
   remetente: 'usuario' | 'chatbot';
   texto: string;
@@ -12,5 +14,6 @@ export interface Conversation {
   data_hora_ultima_mensagem: Date;
   status_conversa: 'aberta' | 'inativa' | 'fechada';
   mensagens: Message[];
-  menu_state?: 'menu' | 'ia_mode' | 'autorizar_exame';
+  menu_state?: 'menu' | 'ia_mode' | 'autorizar_exame' | 'agendamento';
+  agendamento_step?: AgendamentoStep;
 }
