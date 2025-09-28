@@ -54,6 +54,18 @@ export const extractTextFromPDF = async (file: File) => {
   return res.data;
 };
 
+export const uploadAutorizacaoExame = async (file: File, lang?: string, dpi?: number) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (lang) formData.append('lang', lang);
+  if (dpi) formData.append('dpi', dpi.toString());
+  
+  const res = await api.post("/api/chat/upload-autorizacao", formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return res.data;
+};
+
 export const CarregarConversas = async (userId: string) => {
   return await getConversations(userId);
 };

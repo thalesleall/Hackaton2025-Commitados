@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { ArrowLeft, Paperclip } from "lucide-react"
-import { sendMessage, extractTextFromPDF, getConversation } from "../service/api"
+import { sendMessage, extractTextFromPDF, getConversation, uploadAutorizacaoExame } from "../service/api"
 
 type Message = {
   sender: "user" | "bot"
@@ -25,6 +25,7 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [conversationStatus, setConversationStatus] = useState<'aberta' | 'inativa' | 'fechada'>('aberta')
+  const [isAutorizacaoMode, setIsAutorizacaoMode] = useState(false)
   
   const userId = localStorage.getItem("idUser") || "user123"
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -120,6 +121,8 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
       setCurrentConversationId(conversationId)
       setConversationStatus('aberta')
       setInput("")
+      setIsAutorizacaoMode(false)
+      setShowUpload(false)
       
       if (conversationId && conversationId !== 'new') {
         // Carrega conversa existente
@@ -191,6 +194,20 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
 
       setMessages(prev => [...prev, botMessage])
 
+      // Detectar se entramos no modo de autorização de exame
+      const botText = (response.reply || "").toLowerCase()
+      if (botText.includes("sistema de autorização de exames") || 
+          botText.includes("envie o arquivo pdf do pedido") ||
+          botText.includes("modo de autorização de exames")) {
+        setIsAutorizacaoMode(true)
+        setShowUpload(true)
+      } else if (botText.includes("como posso ajudá-lo hoje") || 
+                 botText.includes("olá! como posso ajudá-lo") ||
+                 (botText.includes("digite 0 para voltar ao menu") && !botText.includes("autorização"))) {
+        setIsAutorizacaoMode(false)
+        setShowUpload(false)
+      }
+
     } catch (error: any) {
       console.error('Erro ao enviar mensagem:', error)
       
@@ -218,8 +235,24 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
     setIsLoading(true)
     setShowUpload(false)
 
+    // Adicionar mensagem do usuário mostrando que enviou um arquivo
+    const userMessage: Message = {
+      sender: "user",
+      text: `📄 Arquivo enviado: ${file.name}`,
+      timestamp: new Date().toLocaleTimeString()
+    }
+    setMessages(prev => [...prev, userMessage])
+
     try {
-      const processResponse = await extractTextFromPDF(file)
+      let processResponse
+
+      if (isAutorizacaoMode) {
+        // Usar endpoint de autorização de exame
+        processResponse = await uploadAutorizacaoExame(file)
+      } else {
+        // Usar endpoint de OCR normal
+        processResponse = await extractTextFromPDF(file)
+      }
       
       if (processResponse.conversation?.id) {
         setCurrentConversationId(processResponse.conversation.id)
@@ -233,12 +266,23 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
 
       setMessages(prev => [...prev, botMessage])
 
-    } catch (error) {
+      // Se processou uma autorização, sair do modo de autorização
+      if (isAutorizacaoMode) {
+        setIsAutorizacaoMode(false)
+      }
+
+    } catch (error: any) {
       console.error('Erro ao processar arquivo:', error)
-      alert('Erro ao processar arquivo. Tente novamente.')
+      
+      const errorMessage: Message = {
+        sender: "bot",
+        text: `❌ Erro ao processar arquivo: ${error.response?.data?.error || error.message || 'Erro desconhecido'}`,
+        timestamp: new Date().toLocaleTimeString()
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
-      setShowUpload(false)
     }
   }
 
@@ -357,13 +401,26 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
 
           {showUpload && (
             <div className="absolute bottom-14 left-0 bg-white border shadow-lg rounded-lg p-3 z-10 w-64 sm:w-80">
+              {isAutorizacaoMode && (
+                <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-700 font-medium">📋 Autorização de Exame</p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Envie o PDF do pedido médico para análise
+                  </p>
+                </div>
+              )}
               <input
                 type="file"
                 accept="application/pdf"
                 onChange={handleFileSelect}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
               />
-              <p className="text-xs text-gray-500 mt-1">Apenas arquivos PDF</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {isAutorizacaoMode 
+                  ? "Será processado para identificar exames e auditoria" 
+                  : "Apenas arquivos PDF"
+                }
+              </p>
             </div>
           )}
 

@@ -2,14 +2,18 @@
 
 import { IaService } from './IA.service';
 import { DatabaseService } from './database.service';
+import { AutorizacaoService } from './autorizacao.service';
 import { Message, Conversation } from '../models/conversation.model';
 
 export class ChatService {
+  private autorizacaoService: AutorizacaoService;
+
   constructor(
     private iaService: IaService,
     private databaseService?: DatabaseService
   ) {
-    console.log('ChatService inicializado.');
+    this.autorizacaoService = new AutorizacaoService();
+    console.log('ChatService inicializado com serviço de autorização.');
   }
 
   /**
@@ -98,7 +102,7 @@ export class ChatService {
     // PRIORIDADE 4: Outros menus (ex: autorização de exame)
     else if (conversation.menu_state === 'autorizar_exame') {
       console.log('[ChatService] Processando autorização de exame');
-      respostaChatbot = this.processOtherMenus(mensagemDoUsuario, conversation);
+      respostaChatbot = await this.processOtherMenus(mensagemDoUsuario, conversation);
     }
     // PRIORIDADE 5: Menu principal (estado 'menu' ou novo)
     else if (conversation.menu_state === 'menu' || !conversation.menu_state) {
@@ -180,6 +184,61 @@ ${this.getMainMenu()}`;
     const iaResponseText = await this.iaService.conversar(mensagemDoUsuario, historicoMensagens);
 
     return iaResponseText;
+  }
+
+  /**
+   * Processa arquivo de autorização de exame
+   */
+  public async processarAutorizacaoExame(filePath: string, lang?: string, dpi?: number): Promise<string> {
+    try {
+      console.log(`[ChatService] Processando autorização de exame: ${filePath}`);
+      
+      const resultado = await this.autorizacaoService.processarExame(filePath, lang, dpi);
+      
+      if (!resultado) {
+        return `❌ **Não foi possível identificar o exame**
+
+Não conseguimos identificar nenhum procedimento no documento enviado. 
+
+Por favor:
+- Verifique se o arquivo é um pedido médico válido
+- Certifique-se de que o texto está legível
+- Tente enviar um arquivo de melhor qualidade
+
+Digite 0 para voltar ao menu principal.`;
+      }
+
+      let mensagem = `✅ **Autorização de Exame Processada**
+
+📋 **Exame:** ${resultado.exame}
+⏱️ **Auditoria:** ${resultado.auditoria}`;
+
+      // Adicionar data de resposta se houver auditoria
+      if (resultado.dataResposta) {
+        mensagem += `
+📅 **Resposta prevista para:** ${resultado.dataResposta}`;
+      }
+
+      mensagem += `
+
+Digite 0 para voltar ao menu principal.`;
+
+      return mensagem;
+
+    } catch (error: any) {
+      console.error('[ChatService] Erro ao processar autorização:', error);
+      
+      return `❌ **Erro ao processar o arquivo**
+
+Ocorreu um erro ao analisar o documento: ${error.message}
+
+Por favor:
+- Verifique se o arquivo é um PDF válido
+- Tente enviar o arquivo novamente
+- Certifique-se de que o arquivo não está corrompido
+
+Digite 0 para voltar ao menu principal.`;
+    }
   }
 
   // =============================================
@@ -284,11 +343,16 @@ ${this.getMainMenu()}`;
   /**
    * Processa outros menus (autorizar exame)
    */
-  private processOtherMenus(mensagemDoUsuario: string, conversation: Conversation): string {
+  private async processOtherMenus(mensagemDoUsuario: string, conversation: Conversation): Promise<string> {
     if (conversation.menu_state === 'autorizar_exame') {
-      return `📋 Você está no sistema de autorização de exames.
+      return `📋 **Sistema de Autorização de Exames**
 
-Funcionalidade em desenvolvimento.
+Para analisar seu pedido de exame, por favor envie o arquivo PDF do pedido médico.
+
+💡 **Como fazer:**
+1. Clique no ícone de anexo (📎)
+2. Selecione o arquivo PDF do seu pedido
+3. Aguarde o processamento
 
 Digite 0 para voltar ao menu principal.`;
     }

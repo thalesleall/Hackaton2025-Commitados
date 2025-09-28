@@ -136,4 +136,46 @@ export class ChatController {
       res.status(500).json({ error: error.message || 'Erro interno do servidor.' });
     }
   }
+
+  /**
+   * Endpoint POST /chat/upload-autorizacao
+   * Processa upload de arquivo para autorização de exame
+   */
+  public async handleUploadAutorizacao(req: Request, res: Response): Promise<void> {
+    try {
+      // Verificar se foi enviado um arquivo
+      if (!req.file) {
+        res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
+        return;
+      }
+
+      const file = req.file;
+      
+      // Verificar se é um PDF
+      if (file.mimetype !== 'application/pdf') {
+        res.status(400).json({ error: 'Apenas arquivos PDF são aceitos.' });
+        return;
+      }
+
+      // Parâmetros opcionais
+      const { lang, dpi } = req.body;
+
+      // Processar o arquivo
+      const resultado = await this.chatService.processarAutorizacaoExame(
+        file.path,
+        lang,
+        dpi ? parseInt(dpi) : undefined
+      );
+
+      res.json({ 
+        reply: resultado,
+        filename: file.originalname,
+        processed: true
+      });
+
+    } catch (error: any) {
+      console.error('Erro no upload de autorização:', error);
+      res.status(500).json({ error: error.message || 'Erro interno do servidor.' });
+    }
+  }
 }

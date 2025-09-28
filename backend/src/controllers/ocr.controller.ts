@@ -14,7 +14,7 @@ export async function ocrPdfController(req: Request, res: Response, next: NextFu
 
     const result = await extractTextFromPdf(file.path, { lang, dpi })
 
-    const response = await  searchProcedimentoTop(result.text.split('\n'))
+    const response = await searchProcedimentoTop(result.text.split('\n'))
     return res.json(response)
   } catch (err) {
     next(err)
