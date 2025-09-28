@@ -2,6 +2,25 @@ export interface Message {
   remetente: 'usuario' | 'chatbot';
   texto: string;
   data_hora: Date; // Usaremos objetos Date para facilitar cálculos
+  // Metadata para payload do agendamento
+  agendamento_payload?: Partial<AgendamentoPayload>;
+}
+
+export interface AgendamentoPayload {
+  especialidade: string;
+  especialidade_opcao: number;
+  medico_id: string;
+  medico_nome: string;
+  medico_cidade: string;
+  medico_opcao: number;
+  agenda_id: string;
+  data_selecionada: string;
+  data_formatada: string;
+  data_opcao: number;
+  horario_inicio: string;
+  horario_fim: string;
+  paciente_nome: string;
+  paciente_telefone: string;
 }
 
 export interface Conversation {
@@ -16,15 +35,6 @@ export interface Conversation {
               'agendar_especialidade' | 'agendar_medico' | 'agendar_data' | 
               'agendar_dados' | 'agendar_confirmacao'; // Estado do menu (não persistido)
   
-  // Dados temporários para agendamento (não persistidos)
-  agendamento_temp?: {
-    especialidade?: string;
-    medico_id?: string;
-    medico_nome?: string;
-    agenda_id?: string;
-    data_selecionada?: string;
-    horario_selecionado?: string;
-    paciente_nome?: string;
-    paciente_telefone?: string;
-  };
+  // Payload do agendamento que vai sendo montado progressivamente
+  agendamento_payload?: Partial<AgendamentoPayload>;
 }

@@ -3,7 +3,8 @@
 import { IaService } from './IA.service';
 import { DatabaseService } from './database.service';
 import { AgendamentoService } from './agendamento.service';
-import { Message, Conversation } from '../models/conversation.model';
+import { AgendamentoPayloadService } from './agendamento-payload.service';
+import { Message, Conversation, AgendamentoPayload } from '../models/conversation.model';
 
 export class ChatService {
   private agendamentoService: AgendamentoService;
@@ -71,8 +72,13 @@ export class ChatService {
         status_conversa: 'aberta',
         mensagens: [],
         menu_state: 'menu', // Sempre inicia no menu
-        agendamento_temp: {} // Dados temporários do agendamento
+        agendamento_payload: {} // Payload do agendamento
       };
+    } else {
+      // Carregar payload das mensagens se não existir
+      if (!conversation.agendamento_payload) {
+        conversation.agendamento_payload = AgendamentoPayloadService.extrairPayloadDasMensagens(conversation);
+      }
     }
 
     // 3. Adicionar nova mensagem do usuário
@@ -301,9 +307,9 @@ ${this.getMainMenu()}`;
    */
   private async processAgendamento(mensagemDoUsuario: string, conversation: Conversation): Promise<string> {
     try {
-      // Inicializar dados temporários se não existirem
-      if (!conversation.agendamento_temp) {
-        conversation.agendamento_temp = {};
+      // Garantir que o payload existe
+      if (!conversation.agendamento_payload) {
+        conversation.agendamento_payload = AgendamentoPayloadService.extrairPayloadDasMensagens(conversation);
       }
 
       switch (conversation.menu_state) {
@@ -311,15 +317,19 @@ ${this.getMainMenu()}`;
           return await this.iniciarAgendamento(conversation);
           
         case 'agendar_especialidade':
+          console.log(conversation)
           return await this.processarEspecialidade(mensagemDoUsuario, conversation);
           
         case 'agendar_medico':
+          console.log(conversation)
           return await this.processarMedico(mensagemDoUsuario, conversation);
           
         case 'agendar_data':
+          console.log(conversation)
           return await this.processarData(mensagemDoUsuario, conversation);
           
         case 'agendar_dados':
+          console.log(conversation)
           return await this.processarDadosPaciente(mensagemDoUsuario, conversation);
           
         case 'agendar_confirmacao':
@@ -377,6 +387,8 @@ Digite 0 para voltar ao menu principal.`;
       return true;
     });
   }
+
+
 
   /**
    * Determina o estado do menu com base no histórico da conversa
@@ -539,7 +551,14 @@ Digite 0 para voltar ao menu principal.`;
       }
 
       const especialidadeSelecionada = especialidades[opcao - 1].especialidade;
-      conversation.agendamento_temp!.especialidade = especialidadeSelecionada;
+      
+      // Salvar dados no payload
+      const dadosEspecialidade: Partial<AgendamentoPayload> = {
+        especialidade: especialidadeSelecionada,
+        especialidade_opcao: opcao
+      };
+      
+      AgendamentoPayloadService.atualizarPayload(conversation, dadosEspecialidade);
 
       const medicos = await this.agendamentoService.getMedicosPorEspecialidade(especialidadeSelecionada);
       
@@ -590,9 +609,20 @@ Digite 0 para voltar ao menu principal.`;
 Digite 0 para voltar ao menu principal.`;
       }
 
-      const medicos = await this.agendamentoService.getMedicosPorEspecialidade(
-        conversation.agendamento_temp!.especialidade!
-      );
+      // Verificar se temos a especialidade no payload
+      console.log('[ChatService] Verificando especialidade no payloadddddddddddddd' +  JSON.stringify(conversation.agendamento_payload));
+      if (!conversation.agendamento_payload?.especialidade) {
+        console.error('[ChatService] Especialidade não encontrada no payload');
+        conversation.menu_state = 'agendar_consulta';
+        return `❌ Erro: especialidade não encontrada. Vamos reiniciar o agendamento.
+
+${await this.iniciarAgendamento(conversation)}`;
+      }
+
+      const especialidadeTemp = conversation.agendamento_payload.especialidade;
+      console.log('[ChatService] Buscando médicos para especialidade:', especialidadeTemp);
+      
+      const medicos = await this.agendamentoService.getMedicosPorEspecialidade(especialidadeTemp);
       
       if (opcao < 1 || opcao > medicos.length) {
         return `❌ Opção inválida. Digite um número entre 1 e ${medicos.length}.
@@ -601,8 +631,16 @@ Digite 0 para voltar ao menu principal.`;
       }
 
       const medicoSelecionado = medicos[opcao - 1];
-      conversation.agendamento_temp!.medico_id = medicoSelecionado.id;
-      conversation.agendamento_temp!.medico_nome = medicoSelecionado.nome;
+      
+      // Salvar dados do médico no payload
+      const dadosMedico: Partial<AgendamentoPayload> = {
+        medico_id: medicoSelecionado.id,
+        medico_nome: medicoSelecionado.nome,
+        medico_cidade: medicoSelecionado.cidade,
+        medico_opcao: opcao
+      };
+      
+      AgendamentoPayloadService.atualizarPayload(conversation, dadosMedico);
 
       const horarios = await this.agendamentoService.getHorariosDisponiveis(medicoSelecionado.id);
       
@@ -615,7 +653,7 @@ Tente escolher outro médico ou digite 0 para voltar ao menu principal.`;
       conversation.menu_state = 'agendar_data';
       
       let mensagem = `📅 **${medicoSelecionado.nome.toUpperCase()}**
-🩺 ${conversation.agendamento_temp!.especialidade} • 📍 ${medicoSelecionado.cidade}
+🩺 ${especialidadeTemp} • 📍 ${medicoSelecionado.cidade}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⏰ **Datas e Horários Disponíveis:**
@@ -669,8 +707,17 @@ Digite 0 para voltar ao menu principal.`;
 Digite 0 para voltar ao menu principal.`;
       }
 
+      // Verificar se temos dados do médico no payload
+      if (!conversation.agendamento_payload?.medico_id) {
+        console.error('[ChatService] Dados do médico não encontrados no payload');
+        conversation.menu_state = 'agendar_consulta';
+        return `❌ Erro: dados do médico não encontrados. Vamos reiniciar o agendamento.
+
+${await this.iniciarAgendamento(conversation)}`;
+      }
+
       const horarios = await this.agendamentoService.getHorariosDisponiveis(
-        conversation.agendamento_temp!.medico_id!
+        conversation.agendamento_payload.medico_id
       );
 
       // Agrupar por data (mesma lógica do método anterior)
@@ -695,16 +742,25 @@ Digite 0 para voltar ao menu principal.`;
       // Se há apenas um horário, seleciona automaticamente
       if (horariosData.length === 1) {
         const horario = horariosData[0];
-        conversation.agendamento_temp!.agenda_id = horario.agenda_id;
-        conversation.agendamento_temp!.data_selecionada = dataSelecionada;
-        conversation.agendamento_temp!.horario_selecionado = horario.horario_inicio;
+        
+        // Salvar dados da data/horário no payload
+        const dadosHorario: Partial<AgendamentoPayload> = {
+          agenda_id: horario.agenda_id,
+          data_selecionada: dataSelecionada,
+          data_formatada: horario.data_formatada,
+          horario_inicio: horario.horario_inicio,
+          horario_fim: horario.horario_fim,
+          data_opcao: opcao
+        };
+        
+        AgendamentoPayloadService.atualizarPayload(conversation, dadosHorario);
         
         conversation.menu_state = 'agendar_dados';
         return this.solicitarDadosPaciente(conversation);
       }
 
       // Se há múltiplos horários, deixar o usuário escolher
-      conversation.agendamento_temp!.data_selecionada = dataSelecionada;
+      // (implementar se necessário - por agora assumimos um horário por data)
       
       let mensagem = `📅 **${horariosData[0].data_formatada}**
 
@@ -751,7 +807,7 @@ Para concluir, preciso de algumas informações:
   private async processarDadosPaciente(mensagemDoUsuario: string, conversation: Conversation): Promise<string> {
     const input = mensagemDoUsuario.trim();
 
-    if (!conversation.agendamento_temp!.paciente_nome) {
+    if (!conversation.agendamento_payload?.paciente_nome) {
       // Primeira etapa: receber nome
       if (input.length < 3) {
         return `❌ **Nome muito curto!**
@@ -759,7 +815,13 @@ Para concluir, preciso de algumas informações:
 👤 Digite seu **nome completo** (mínimo 3 caracteres).`;
       }
 
-      conversation.agendamento_temp!.paciente_nome = input;
+      // Salvar nome no payload
+      const dadosNome: Partial<AgendamentoPayload> = {
+        paciente_nome: input
+      };
+      
+      AgendamentoPayloadService.atualizarPayload(conversation, dadosNome);
+
       return `📞 **Perfeito, ${input}!**
 
 Agora digite seu **telefone com DDD**:
@@ -777,37 +839,17 @@ Agora digite seu **telefone com DDD**:
 Digite novamente:`;
       }
 
-      conversation.agendamento_temp!.paciente_telefone = input;
+      // Salvar telefone no payload
+      const dadosTelefone: Partial<AgendamentoPayload> = {
+        paciente_telefone: input
+      };
+      
+      AgendamentoPayloadService.atualizarPayload(conversation, dadosTelefone);
+      
       conversation.menu_state = 'agendar_confirmacao';
       
       return this.mostrarResumoAgendamento(conversation);
     }
-  }
-
-  /**
-   * Mostra resumo do agendamento para confirmação
-   */
-  private mostrarResumoAgendamento(conversation: Conversation): string {
-    const dados = conversation.agendamento_temp!;
-    
-    return `📋 **CONFIRMAÇÃO DO AGENDAMENTO**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🩺 **Dados da Consulta:**
-👨‍⚕️ **Médico:** ${dados.medico_nome}
-🏥 **Especialidade:** ${dados.especialidade}
-📅 **Data:** ${dados.data_selecionada}
-⏰ **Horário:** ${this.agendamentoService.formatarHorario(dados.horario_selecionado!)}
-
-👤 **Dados do Paciente:**
-� **Nome:** ${dados.paciente_nome}
-📞 **Telefone:** ${dados.paciente_telefone}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Para **CONFIRMAR**, digite: **CONFIRMAR**
-❌ Para cancelar, digite: **0**
-
-⚠️ **Importante:** Após confirmação, não será possível alterar os dados.`;
   }
 
   /**
@@ -822,56 +864,66 @@ Para cancelar, digite: 0`;
     }
 
     try {
-      const dados = conversation.agendamento_temp!;
+      // Validar payload completo
+      const validacao = AgendamentoPayloadService.validarPayloadCompleto(conversation.agendamento_payload || {});
       
-      const protocolo = await this.agendamentoService.confirmarAgendamento(
-        dados.agenda_id!,
-        dados.paciente_nome!,
-        dados.paciente_telefone!
+      if (!validacao.valido) {
+        console.error('[ChatService] Payload incompleto:', validacao.camposFaltando);
+        conversation.menu_state = 'agendar_consulta';
+        return `❌ Erro: dados do agendamento incompletos (${validacao.camposFaltando.join(', ')}). Vamos reiniciar.
+
+${await this.iniciarAgendamento(conversation)}`;
+      }
+
+      const dadosAgendamento = AgendamentoPayloadService.converterParaAgendamento(
+        conversation.agendamento_payload as AgendamentoPayload
       );
 
-      // Limpar dados temporários
-      conversation.agendamento_temp = {};
-      conversation.menu_state = 'menu';
+      const protocolo = await this.agendamentoService.confirmarAgendamento(
+        dadosAgendamento.agenda_id,
+        dadosAgendamento.paciente_nome,
+        dadosAgendamento.paciente_telefone
+      );
 
-      return `🎉 **AGENDAMENTO CONFIRMADO COM SUCESSO!**
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // Limpar payload
+      AgendamentoPayloadService.limparPayload(conversation);
 
-🎫 **PROTOCOLO:** ${protocolo}
+      return `✅ **AGENDAMENTO CONFIRMADO!**
 
-🩺 **Resumo da Consulta:**
-👨‍⚕️ **Médico:** ${dados.medico_nome}
-🏥 **Especialidade:** ${dados.especialidade}
-📅 **Data:** ${dados.data_selecionada}
-⏰ **Horário:** ${this.agendamentoService.formatarHorario(dados.horario_selecionado!)}
+🎫 **Protocolo:** ${protocolo}
 
-👤 **Paciente:**
-� **Nome:** ${dados.paciente_nome}
-📞 **Telefone:** ${dados.paciente_telefone}
+${AgendamentoPayloadService.obterResumo(conversation.agendamento_payload || {})}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ **INSTRUÇÕES IMPORTANTES:**
-• ⏰ Chegue com **15 minutos** de antecedência
-• 🆔 Traga **documento com foto**
-• 💾 **Guarde este protocolo:** ${protocolo}
-• 📱 Em caso de dúvidas, entre em contato
+📱 **Importante:** Anote seu protocolo!
+⏰ Chegue com 15 minutos de antecedência
+📋 Traga um documento com foto
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${this.getMainMenu()}`;
-
-    } catch (error) {
+Digite **0** para voltar ao menu principal`;
+    } catch (error: any) {
       console.error('[ChatService] Erro ao confirmar agendamento:', error);
       
-      // Limpar dados temporários mesmo em caso de erro
-      conversation.agendamento_temp = {};
-      conversation.menu_state = 'menu';
+      // Limpar payload em caso de erro
+      AgendamentoPayloadService.limparPayload(conversation);
       
-      return `❌ Erro ao confirmar agendamento. O horário pode ter sido ocupado por outro paciente.
+      return `❌ **Erro ao confirmar agendamento!**
 
-Tente fazer um novo agendamento.
+${error.message || 'Tente novamente ou entre em contato com o suporte.'}
 
-${this.getMainMenu()}`;
+Digite 0 para voltar ao menu principal.`;
     }
+  }
+
+  /**
+   * Mostra resumo do agendamento para confirmação
+   */
+  private mostrarResumoAgendamento(conversation: Conversation): string {
+    return AgendamentoPayloadService.obterResumo(conversation.agendamento_payload || {}) + `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Para **CONFIRMAR**, digite: **CONFIRMAR**
+❌ Para cancelar, digite: **0**
+
+⚠️ **Importante:** Após confirmação, não será possível alterar os dados.`;
   }
 }

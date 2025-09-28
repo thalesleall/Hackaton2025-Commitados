@@ -1,196 +1,399 @@
-import { useEffect, useState, useRef } from "react"
-import { Input } from "../components/ui/input"
-import { Button } from "../components/ui/button"
+import { useEffect, useState, useRef, useCallback } from "react"
+import { Input } from "./ui/input"
+import { Button } from "./ui/button"
 import { ArrowLeft, Paperclip } from "lucide-react"
-import { useNavigate } from "react-router-dom"
-// src/components/chatbot.tsx
-import { useEffect, useState } from "react";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { ArrowLeft, Paperclip } from "lucide-react";
-import {loginUsuario, getProfile, sendMessage, sendMessageSimple } from "../service/api";
+import { sendMessage, extractTextFromPDF, getConversation } from "../service/api"
 
 type Message = {
-  sender: "user" | "bot";
-  text: string;
-};
+  sender: "user" | "bot"
+  text: string
+  timestamp?: string
+}
 
 type Props = {
-  conversationId: string | null;
-  onClose: () => void;
-};
+  conversationId: string | null
+  onClose: () => void
+  onConversationCreated?: (conversationId: string) => void
+}
 
-export default function ChatBot({ conversationId, onClose }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [localConversationId, setLocalConversationId] = useState<string | null>(
-    conversationId
-  );
-  const userId = localStorage.getItem("idUser") || "anon";
-  const [showUpload, setShowUpload] = useState(false);
+export default function ChatBot({ conversationId, onClose, onConversationCreated }: Props) {
+  // Estados principais
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [conversationStatus, setConversationStatus] = useState<'aberta' | 'inativa' | 'fechada'>('aberta')
+  
+  const userId = localStorage.getItem("idUser") || "user123"
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isInitializedRef = useRef(false)
+  const conversationIdRef = useRef<string | null>(null)
 
-  // Criar conversa automaticamente se não existir
+  // Scroll para última mensagem
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [])
+
   useEffect(() => {
-    console.log('passou 1')
-    const initConversation = async () => {
-      if (localConversationId) {
-        const msgs = await getConversation(localConversationId);
-        setMessages(msgs);
-        return;
-      }
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
-      try {
-        const res = await sendMessage(userId); // agora envia os campos corretos
-        console.log('passou 2', res)
-        setLocalConversationId(res.conversation?.id || null);
-
-        setMessages([
-          {
+  // Função para carregar histórico da conversa
+  const loadConversationHistory = useCallback(async (convId: string) => {
+    if (!convId || convId === 'new') return
+    
+    try {
+      setIsLoadingHistory(true)
+      const data = await getConversation(convId)
+      
+      if (data?.conversation) {
+        // Captura o status da conversa
+        setConversationStatus(data.conversation.status_conversa || 'aberta')
+        
+        // Converte mensagens do backend
+        if (data.conversation.mensagens && Array.isArray(data.conversation.mensagens)) {
+          const convertedMessages: Message[] = data.conversation.mensagens.map((msg: any) => {
+            const remetente = msg.remetente || msg.origem || msg.sender || ''
+            const normalizedSender = (remetente?.toLowerCase?.() || '').trim()
+            
+            let sender: 'user' | 'bot' = 'bot'
+            if (normalizedSender === 'usuario' || normalizedSender === 'user') {
+              sender = 'user'
+            }
+            
+            return {
+              sender,
+              text: msg.texto || msg.message || msg.conteudo || 'Mensagem sem conteúdo',
+              timestamp: msg.data_hora ? new Date(msg.data_hora).toLocaleTimeString() : new Date().toLocaleTimeString()
+            }
+          })
+          
+          setMessages(convertedMessages)
+          
+          // Aviso para conversa fechada
+          if (data.conversation.status_conversa === 'fechada') {
+            setTimeout(() => {
+              setMessages(prev => [...prev, {
+                sender: "bot",
+                text: "⚠️ Esta conversa foi encerrada. Não é possível enviar novas mensagens.",
+                timestamp: new Date().toLocaleTimeString()
+              }])
+            }, 500)
+          }
+        } else {
+          setMessages([{
             sender: "bot",
-            text:
-              res.reply ||
-              "Olá 👋 Sou seu assistente Unimed. Como posso ajudar?",
-          },
-        ]);
-      } catch (err) {
-        console.error("Erro ao criar conversa:", err);
+            text: "Conversa carregada! Você pode continuar de onde parou.",
+            timestamp: new Date().toLocaleTimeString()
+          }])
+        }
       }
-    };
+    } catch (error) {
+      console.error('Erro ao carregar histórico:', error)
+      setMessages([{
+        sender: "bot",
+        text: "Erro ao carregar histórico. Iniciando nova conversa.",
+        timestamp: new Date().toLocaleTimeString()
+      }])
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }, [])
 
-    initConversation();
-  }, [userId, localConversationId]);
+  // Inicialização do chat - evita resets desnecessários
+  useEffect(() => {
+    const initializeChat = async () => {
+      // Se já foi inicializado e o conversationId não mudou realmente, não faz nada
+      if (isInitializedRef.current && conversationIdRef.current === conversationId) {
+        return
+      }
 
-  // Enviar mensagem para o backend
+      // Marca como inicializado e atualiza a ref
+      isInitializedRef.current = true
+      conversationIdRef.current = conversationId
+
+      // Reset estados apenas para mudanças reais de conversa
+      setMessages([])
+      setCurrentConversationId(conversationId)
+      setConversationStatus('aberta')
+      setInput("")
+      
+      if (conversationId && conversationId !== 'new') {
+        // Carrega conversa existente
+        await loadConversationHistory(conversationId)
+      } else {
+        // Nova conversa - mensagem de boas-vindas
+        setMessages([{
+          sender: "bot",
+          text: "Olá! Sou seu assistente virtual. Como posso ajudá-lo hoje?",
+          timestamp: new Date().toLocaleTimeString()
+        }])
+      }
+    }
+
+    initializeChat()
+
+    // Cleanup quando o componente for desmontado
+    return () => {
+      isInitializedRef.current = false
+      conversationIdRef.current = null
+    }
+  }, [conversationId, loadConversationHistory])
+
+  // Verifica se a conversa está fechada
+  const isConversationClosed = conversationStatus === 'fechada'
+
   const handleSend = async () => {
-    if (!input.trim() || !localConversationId) return;
+    if (!input.trim() || isLoading || isConversationClosed) return
+
+    const userMessage: Message = {
+      sender: "user",
+      text: input.trim(),
+      timestamp: new Date().toLocaleTimeString()
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setInput("")
+    setIsLoading(true)
 
     try {
-      // adiciona localmente
-      setMessages((prev) => [...prev, { sender: "user", text: input }]);
-
-      // envia para backend
-      await EnviarMensagem(localConversationId, {
-        texto: input,
-        origem: "user",
-      });
-
-      // simulação de resposta
-      setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "bot", text: "Entendi sua mensagem: " + input },
-        ]);
-      }, 800);
-
-      setInput("");
-    } catch (err) {
-      console.error("Erro ao enviar mensagem:", err);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0]
-      if (file.type === "application/pdf") {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "user", text: `📎 Enviou um arquivo: ${file.name}` }
-        ])
-      } else {
-        alert("Somente arquivos PDF são permitidos.")
+      // Envia mensagem com conversation_id se existir
+      const payload: any = { text: userMessage.text }
+      if (currentConversationId) {
+        payload.conversation_id = currentConversationId
       }
+      
+      const response = await sendMessage(userId, payload)
+      
+      if (response.conversation?.id) {
+        const newConversationId = response.conversation.id
+        
+        // Se é uma nova conversa, apenas atualiza o estado interno
+        if (!currentConversationId) {
+          setCurrentConversationId(newConversationId)
+          // Atualiza a ref para evitar re-inicialização
+          conversationIdRef.current = newConversationId
+          // Notifica o pai apenas para recarregar a lista
+          if (onConversationCreated) {
+            onConversationCreated(newConversationId)
+          }
+        }
+      }
+
+      const botMessage: Message = {
+        sender: "bot",
+        text: response.reply || "Desculpe, não consegui processar sua mensagem.",
+        timestamp: new Date().toLocaleTimeString()
+      }
+
+      setMessages(prev => [...prev, botMessage])
+
+    } catch (error: any) {
+      console.error('Erro ao enviar mensagem:', error)
+      
+      const errorMessage: Message = {
+        sender: "bot", 
+        text: "Desculpe, ocorreu um erro. Tente novamente.",
+        timestamp: new Date().toLocaleTimeString()
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.type !== 'application/pdf') {
+      alert('Por favor, selecione apenas arquivos PDF.')
+      return
+    }
+
+    setIsLoading(true)
+    setShowUpload(false)
+
+    try {
+      const processResponse = await extractTextFromPDF(file)
+      
+      if (processResponse.conversation?.id) {
+        setCurrentConversationId(processResponse.conversation.id)
+      }
+
+      const botMessage: Message = {
+        sender: "bot",
+        text: processResponse.reply || "Documento processado com sucesso!",
+        timestamp: new Date().toLocaleTimeString()
+      }
+
+      setMessages(prev => [...prev, botMessage])
+
+    } catch (error) {
+      console.error('Erro ao processar arquivo:', error)
+      alert('Erro ao processar arquivo. Tente novamente.')
+    } finally {
+      setIsLoading(false)
+      setShowUpload(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
 
   return (
-    <div className="flex flex-col w-full h-full bg-white rounded-2xl shadow-sm">
+    <div className="flex flex-col w-full h-full max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-lg border">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between px-4 py-3 border-b shadow-sm bg-white rounded-t-2xl">
-        <div className="flex items-center gap-2">
-          <ArrowLeft
-            className="cursor-pointer text-green-700"
-            size={20}
-            onClick={onClose}
-          />
-          <h2 className="font-semibold text-green-700">
-            {localConversationId ? "Conversa" : "Nova Conversa"}
-          </h2>
+      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b bg-green-50 rounded-t-2xl">
+        <div className="flex items-center gap-2 min-w-0">
+          <button onClick={onClose} className="flex-shrink-0 p-1 hover:bg-green-100 rounded-full">
+            <ArrowLeft className="text-green-600 w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-green-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs sm:text-sm font-semibold">AI</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-green-700 text-sm sm:text-base truncate">Assistente Virtual</h3>
+                {isConversationClosed && (
+                  <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-medium">
+                    Fechada
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-green-600 truncate">
+                {isLoadingHistory 
+                  ? "Carregando histórico..." 
+                  : isConversationClosed
+                    ? "Esta conversa foi encerrada"
+                  : currentConversationId 
+                    ? `Conversa: ${currentConversationId.slice(-8)}` 
+                    : "Nova conversa"
+                }
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Histórico */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-gray-50 rounded-b-2xl">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`p-3 rounded-2xl max-w-[75%] text-sm ${
-              msg.sender === "user"
-                ? "bg-green-600 text-white self-end"
-                : "bg-white border border-gray-200 shadow-sm self-start"
-            }`}
-          >
-            {msg.text}
+      {/* Área de mensagens */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 bg-gray-50 min-h-0">
+        <div className="flex flex-col gap-3 min-h-full">
+          {isLoadingHistory ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="text-center">
+                <div className="animate-spin w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full mx-auto"></div>
+                <p className="mt-2 text-gray-600">Carregando histórico da conversa...</p>
+              </div>
+            </div>
+          ) : (
+            messages.map((message, index) => (
+            <div
+              key={index}
+              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] sm:max-w-[80%] md:max-w-[70%] p-3 rounded-lg break-words ${
+                  message.sender === 'user'
+                    ? 'bg-green-600 text-white rounded-br-none'
+                    : 'bg-white border rounded-bl-none shadow-sm'
+                }`}
+              >
+              <p className="whitespace-pre-wrap">{message.text}</p>
+              {message.timestamp && (
+                <p className={`text-xs mt-1 ${
+                  message.sender === 'user' ? 'text-green-100' : 'text-gray-500'
+                }`}>
+                  {message.timestamp}
+                </p>
+              )}
+            </div>
           </div>
-        ))}
+          ))
+        )}
+        
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-white border rounded-lg p-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <span className="text-sm text-gray-500 ml-2">Digitando...</span>
+              </div>
+            </div>
+          </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {/* Input fixo no rodapé */}
-      <div className="border-t p-3 flex gap-2 bg-white rounded-b-2xl items-center">
-      {/* Input */}
-      <div className="border-t p-3 flex gap-2 items-center bg-white rounded-b-2xl relative">
-        <button
-          className="p-2 rounded-full hover:bg-green-50 border border-green-600"
-          onClick={() => setShowUpload(!showUpload)}
-        >
-          <Paperclip className="text-green-600 w-5 h-5" />
-        </button>
+      {/* Área de input */}
+      <div className="border-t p-3 sm:p-4 bg-white rounded-b-2xl">
+        <div className="flex gap-2 items-end relative">
+          <button
+            className={`flex-shrink-0 p-2 rounded-full transition-colors ${
+              isLoading || isConversationClosed 
+                ? 'opacity-50 cursor-not-allowed border border-gray-300' 
+                : 'hover:bg-green-50 border border-green-600'
+            }`}
+            onClick={() => setShowUpload(!showUpload)}
+            disabled={isLoading || isConversationClosed}
+          >
+            <Paperclip className={`w-4 h-4 sm:w-5 sm:h-5 ${
+              isLoading || isConversationClosed ? 'text-gray-400' : 'text-green-600'
+            }`} />
+          </button>
 
-        {showUpload && (
-          <div className="absolute bottom-14 left-3 bg-white border shadow-md rounded-lg p-3">
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  console.log("PDF selecionado:", file.name);
-                }
-              }}
-            />
-          </div>
-        )}
+          {showUpload && (
+            <div className="absolute bottom-14 left-0 bg-white border shadow-lg rounded-lg p-3 z-10 w-64 sm:w-80">
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={handleFileSelect}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+              />
+              <p className="text-xs text-gray-500 mt-1">Apenas arquivos PDF</p>
+            </div>
+          )}
 
-        <Input
-          placeholder="Digite sua mensagem..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-        />
+          <Input
+            placeholder={isConversationClosed ? "Conversa encerrada" : "Digite sua mensagem..."}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyPress}
+            disabled={isLoading || isConversationClosed}
+            className="flex-1 min-w-0"
+          />
 
-        {/* Botão de anexar arquivo */}
-        <Button
-          variant="outline"
-          className="border-green-600 text-green-700"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Paperclip className="w-5 h-5" />
-        </Button>
-        <input
-          type="file"
-          accept="application/pdf"
-          className="hidden"
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-        />
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+          />
 
-        {/* Botão de enviar */}
-        <Button
-          onClick={handleSend}
-          className="bg-green-600 hover:bg-green-700 text-white"
-        >
-          Enviar
-        </Button>
+          <Button
+            onClick={handleSend}
+            disabled={isLoading || !input.trim() || isConversationClosed}
+            className="flex-shrink-0 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-6"
+          >
+            <span className="hidden sm:inline">{isLoading ? "..." : isConversationClosed ? "Bloqueado" : "Enviar"}</span>
+            <span className="sm:hidden">{isConversationClosed ? "🔒" : "➤"}</span>
+          </Button>
+        </div>
       </div>
     </div>
-  );
+  )
 }
