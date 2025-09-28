@@ -1,93 +1,87 @@
 // src/components/chatbot.tsx
-import { useEffect, useState } from "react"
-import { Input } from "./ui/input"
-import { Button } from "./ui/button"
-import { ArrowLeft, Paperclip } from "lucide-react"
-import {
-  CriarConversa,
-  EnviarMensagem,
-  BuscarConversaPorId,
-} from "../service/api"
+import { useEffect, useState } from "react";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { ArrowLeft, Paperclip } from "lucide-react";
+import {loginUsuario, getProfile, sendMessage, sendMessageSimple } from "../service/api";
 
 type Message = {
-  sender: "user" | "bot"
-  text: string
-}
+  sender: "user" | "bot";
+  text: string;
+};
 
 type Props = {
-  conversationId: string | null
-  onClose: () => void
-}
+  conversationId: string | null;
+  onClose: () => void;
+};
 
 export default function ChatBot({ conversationId, onClose }: Props) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
   const [localConversationId, setLocalConversationId] = useState<string | null>(
     conversationId
-  )
-  const userId = localStorage.getItem("idUser") || "anon"
-  const [showUpload, setShowUpload] = useState(false)
+  );
+  const userId = localStorage.getItem("idUser") || "anon";
+  const [showUpload, setShowUpload] = useState(false);
 
   // Criar conversa automaticamente se não existir
   useEffect(() => {
+    console.log('passou 1')
     const initConversation = async () => {
       if (localConversationId) {
-        // já temos uma conversa -> carrega mensagens
-        try {
-          const msgs = await BuscarConversaPorId(localConversationId)
-          setMessages(msgs)
-        } catch (err) {
-          console.error("Erro ao carregar conversa:", err)
-        }
-        return
+        const msgs = await getConversation(localConversationId);
+        setMessages(msgs);
+        return;
       }
 
-      // criar conversa nova
       try {
-        const res = await CriarConversa(userId)
-        setLocalConversationId(res.id) // 🔹 garante que pega sempre `id`
+        const res = await sendMessage(userId); // agora envia os campos corretos
+        console.log('passou 2', res)
+        setLocalConversationId(res.conversation?.id || null);
 
         setMessages([
           {
             sender: "bot",
-            text: "Olá 👋 Sou seu assistente Unimed. Como posso ajudar?",
+            text:
+              res.reply ||
+              "Olá 👋 Sou seu assistente Unimed. Como posso ajudar?",
           },
-        ])
+        ]);
       } catch (err) {
-        console.error("Erro ao criar conversa:", err)
+        console.error("Erro ao criar conversa:", err);
       }
-    }
+    };
 
-    initConversation()
-  }, [userId, localConversationId])
+    initConversation();
+  }, [userId, localConversationId]);
 
   // Enviar mensagem para o backend
   const handleSend = async () => {
-    if (!input.trim() || !localConversationId) return
+    if (!input.trim() || !localConversationId) return;
 
     try {
       // adiciona localmente
-      setMessages((prev) => [...prev, { sender: "user", text: input }])
+      setMessages((prev) => [...prev, { sender: "user", text: input }]);
 
       // envia para backend
       await EnviarMensagem(localConversationId, {
         texto: input,
         origem: "user",
-      })
+      });
 
       // simulação de resposta
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
           { sender: "bot", text: "Entendi sua mensagem: " + input },
-        ])
-      }, 800)
+        ]);
+      }, 800);
 
-      setInput("")
+      setInput("");
     } catch (err) {
-      console.error("Erro ao enviar mensagem:", err)
+      console.error("Erro ao enviar mensagem:", err);
     }
-  }
+  };
 
   return (
     <div className="flex flex-col w-full h-full bg-white rounded-2xl shadow-sm">
@@ -137,9 +131,9 @@ export default function ChatBot({ conversationId, onClose }: Props) {
               type="file"
               accept="application/pdf"
               onChange={(e) => {
-                const file = e.target.files?.[0]
+                const file = e.target.files?.[0];
                 if (file) {
-                  console.log("PDF selecionado:", file.name)
+                  console.log("PDF selecionado:", file.name);
                 }
               }}
             />
@@ -160,5 +154,5 @@ export default function ChatBot({ conversationId, onClose }: Props) {
         </Button>
       </div>
     </div>
-  )
+  );
 }

@@ -7,7 +7,7 @@ import { Home, User, Settings, MessageSquarePlus, Paperclip, X } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion"
 import ChatBot from "../components/chatbot"
 import { Dropdown } from "../components/DropDown"
-import { CarregarConversas, CriarConversa } from "../service/api"
+import { Carregar}
 
 /* ================================
    Tipos
@@ -101,45 +101,48 @@ export default function Central() {
   // Carregar conversas ou criar uma nova
   useEffect(() => {
     const fetchData = async () => {
-      const userId = localStorage.getItem("idUser") || ""
-      if (!userId) return
+      const userId = localStorage.getItem("idUser") || "";
+      if (!userId) return;
       try {
-        setLoading(true)
-        setLoadError(null)
+        setLoading(true);
+        setLoadError(null);
 
-        let data = await CarregarConversas(userId)
+        let conversas = await CarregarConversas(userId);
 
-        if (!Array.isArray(data) || data.length === 0) {
-          const created = await CriarConversa(userId)
-          data = [created]
+        // Se não houver conversas, crie uma nova.
+        if (!Array.isArray(conversas) || conversas.length === 0) {
+          const novaConversa = await CriarConversa(userId);
+          // Adiciona a nova conversa em um array para manter o formato consistente.
+          conversas = [novaConversa];
         }
 
-        const last = data[data.length - 1]
-        const lastMsg = last.mensagens?.length
-          ? last.mensagens[last.mensagens.length - 1]
-          : null
+        // Pega a conversa mais recente do array
+        const ultimaConversa = conversas[conversas.length - 1];
+        const ultimaMensagem = ultimaConversa.mensagens?.length
+          ? ultimaConversa.mensagens[ultimaConversa.mensagens.length - 1]
+          : null;
 
         const item: ChatListItem = {
-          id: String(last.id),
+          id: String(ultimaConversa.id),
           nome: "Conversa atual",
-          protocolo: `#${String(last.id).slice(0, 6)}`,
+          protocolo: `#${String(ultimaConversa.id).slice(0, 6)}`,
           canal: "Chat",
           status: "Atualizada recentemente",
-          msg: lastMsg?.texto || "Sem mensagens ainda.",
-        }
+          msg: ultimaMensagem?.texto || "Inicie a conversa.",
+        };
 
-        setItems([item])
-        setActiveChat(last.id)
+        setItems([item]);
+        setActiveChat(ultimaConversa.id);
       } catch (err: any) {
-        console.error(err)
-        setLoadError("Não foi possível carregar as conversas.")
-        setItems([])
+        console.error(err);
+        setLoadError("Não foi possível carregar ou criar a conversa.");
+        setItems([]);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchData()
-  }, [])
+    };
+    fetchData();
+  }, []);
 
   const filteredChats = useMemo(() => {
     const term = search.toLowerCase()
