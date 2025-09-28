@@ -12,7 +12,7 @@ export interface Conversation {
   titulo?: string;
   data_hora_inicio: Date;
   data_hora_ultima_mensagem: Date;
-  status_conversa: 'aberta' | 'inativa' | 'fechada';
+  status_conversa: 'aberta' | 'fechada';
   mensagens: Message[];
   menu_state?: 'menu' | 'ia_mode' | 'autorizar_exame' | 'agendamento';
   agendamento_step?: AgendamentoStep;

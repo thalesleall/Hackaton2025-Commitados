@@ -8,11 +8,6 @@ export class DatabaseService {
 
   constructor() {
     console.log('DatabaseService inicializado com Supabase.');
-    
-    // Limpeza automática de conversas inativas a cada 5 minutos
-    setInterval(() => {
-      this.checkAndFinalizeInactiveConversations();
-    }, 5 * 60 * 1000);
   }
 
   /**
@@ -23,6 +18,7 @@ export class DatabaseService {
       .from('conversations')
       .select('*')
       .eq('id_usuario', idUsuario)
+      .eq('status', 'aberta')
       .order('updated_at', { ascending: false })
       .limit(1)
       .single();
@@ -162,78 +158,48 @@ export class DatabaseService {
   }
 
   /**
-   * Verifica e finaliza conversas inativas há mais de 10 minutos
+   * Fecha uma conversa permanentemente
    */
-  public async checkAndFinalizeInactiveConversations(): Promise<number> {
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    
-    try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('id, updated_at')
-        .lt('updated_at', tenMinutesAgo.toISOString());
+  public async closeConversation(conversationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('conversations')
+      .update({ 
+        status: 'fechada',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', conversationId);
 
-      if (error) {
-        console.error('[DB] Erro ao buscar conversas inativas:', error);
-        return 0;
-      }
-
-      if (!data || data.length === 0) {
-        return 0;
-      }
-
-      console.log(`[DB] Encontradas ${data.length} conversas inativas para finalizar`);
-      
-      // Não precisamos atualizar nada no banco, apenas limpar do cache
-      let finalizadas = 0;
-      for (const conv of data) {
-        if (this.cache.has(conv.id)) {
-          this.cache.delete(conv.id);
-          finalizadas++;
-        }
-      }
-
-      console.log(`[DB] ${finalizadas} conversas removidas do cache por inatividade`);
-      return finalizadas;
-
-    } catch (error) {
-      console.error('[DB] Erro ao finalizar conversas inativas:', error);
-      return 0;
+    if (error) {
+      console.error('[DB Supabase] Erro ao fechar conversa:', error);
+      throw new Error(`Erro ao fechar conversa ${conversationId}: ${error.message}`);
     }
+
+    // Remove do cache
+    if (this.cache.has(conversationId)) {
+      this.cache.delete(conversationId);
+    }
+
+    console.log(`[DB] Conversa ${conversationId} fechada com sucesso`);
   }
 
-  /**
-   * Verifica se uma conversa está inativa (mais de 10 minutos)
-   */
-  public isConversationInactive(conversation: Conversation): boolean {
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    return conversation.data_hora_ultima_mensagem < tenMinutesAgo;
-  }
+
 
   /**
    * Converte dados do banco para o modelo da aplicação
    */
   private convertFromDatabase(data: any): Conversation {
-    const conversation = {
+    return {
       id_usuario: data.id_usuario,
       id_conversa: data.id,
       titulo: data.titulo,
       data_hora_inicio: new Date(data.created_at),
       data_hora_ultima_mensagem: new Date(data.updated_at),
-      status_conversa: 'aberta', // Padrão, já que não temos esse campo na tabela
+      status_conversa: data.status || 'aberta', // Pega do banco ou padrão aberta
       mensagens: data.mensagens?.map((msg: any) => ({
         remetente: msg.remetente,
         texto: msg.texto,
         data_hora: new Date(msg.data_hora)
       })) || []
     } as Conversation;
-
-    // Verifica se a conversa está inativa e marca como finalizada
-    if (this.isConversationInactive(conversation)) {
-      conversation.status_conversa = 'fechada';
-      console.log(`[DB] Conversa ${conversation.id_conversa} marcada como fechada por inatividade`);
-    }
-
-    return conversation;
   }
 }

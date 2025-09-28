@@ -39,9 +39,9 @@ export class ChatService {
       // Buscar conversa existente
       conversation = await this.databaseService.getConversationById(conversationId);
       
-      // Verificar se a conversa está inativa (mais de 10 minutos)
-      if (conversation && this.databaseService.isConversationInactive(conversation)) {
-        console.log(`[ChatService] Conversa ${conversationId} inativa há mais de 10 minutos. Iniciando nova conversa.`);
+      // Verificar se a conversa está fechada
+      if (conversation && conversation.status_conversa === 'fechada') {
+        console.log(`[ChatService] Conversa ${conversationId} está fechada. Iniciando nova conversa.`);
         conversation = null; // Força criação de nova conversa
       } else if (conversation) {
         // IMPORTANTE: Conversas vindas do banco não têm menu_state, definir com base no contexto
@@ -49,14 +49,10 @@ export class ChatService {
         console.log(`[ChatService] Conversa carregada do banco com estado: ${conversation.menu_state}`);
       }
     } else if (this.databaseService) {
-      // Buscar conversa mais recente do usuário
+      // Buscar conversa mais recente do usuário (apenas abertas)
       conversation = await this.databaseService.findLatestConversationByUserId(idUsuario);
       
-      // Verificar se a conversa está inativa (mais de 10 minutos)
-      if (conversation && this.databaseService.isConversationInactive(conversation)) {
-        console.log(`[ChatService] Última conversa do usuário ${idUsuario} inativa há mais de 10 minutos. Iniciando nova conversa.`);
-        conversation = null; // Força criação de nova conversa
-      } else if (conversation) {
+      if (conversation) {
         // IMPORTANTE: Conversas vindas do banco não têm menu_state, definir com base no contexto
         conversation.menu_state = this.determineMenuState(conversation);
         console.log(`[ChatService] Conversa recente carregada com estado: ${conversation.menu_state}`);
@@ -97,6 +93,21 @@ export class ChatService {
       conversation.menu_state = 'menu';
       respostaChatbot = this.getMainMenu();
     }
+    // PRIORIDADE 1.5: Comando "9" sempre fecha a conversa
+    else if (mensagemDoUsuario.trim() === '9') {
+      console.log('[ChatService] Comando "9" detectado - fechando conversa');
+      
+      if (this.databaseService && conversation.id_conversa && !conversation.id_conversa.startsWith('temp-')) {
+        await this.databaseService.closeConversation(conversation.id_conversa);
+      }
+      
+      conversation.status_conversa = 'fechada';
+      respostaChatbot = `👋 **Conversa Encerrada**
+
+Obrigado por usar nosso atendimento! Sua conversa foi encerrada com sucesso.
+
+Para iniciar uma nova conversa, envie qualquer mensagem.`;
+    }
     // PRIORIDADE 2: Modo IA
     else if (conversation.menu_state === 'ia_mode') {
       console.log('[ChatService] Processando no modo IA');
@@ -116,25 +127,15 @@ export class ChatService {
     else if (conversation.menu_state === 'menu' || !conversation.menu_state) {
       console.log('[ChatService] Processando seleção do menu principal');
       
-      // Verificar se é uma conversa reiniciada por inatividade
-      const isResumedConversation = conversationId && conversation.mensagens.length === 1;
+      // Verificar se é a primeira mensagem do usuário
+      const isFirstMessage = conversation.mensagens.length === 1; // Só tem a mensagem atual do usuário
       
-      if (isResumedConversation) {
-        respostaChatbot = `⏰ Sua sessão anterior foi finalizada por inatividade (10 minutos).
-
-${this.getMainMenu()}`;
-        // Não processar a mensagem como seleção de menu neste caso
+      if (isFirstMessage) {
+        // Primeira mensagem - mostrar greeting personalizado
+        respostaChatbot = this.getWelcomeMessage();
       } else {
-        // Verificar se é a primeira mensagem do usuário
-        const isFirstMessage = conversation.mensagens.length === 1; // Só tem a mensagem atual do usuário
-        
-        if (isFirstMessage) {
-          // Primeira mensagem - mostrar greeting personalizado
-          respostaChatbot = this.getWelcomeMessage();
-        } else {
-          // Processar normalmente como seleção do menu
-          respostaChatbot = await this.processMenuSelection(mensagemDoUsuario, conversation);
-        }
+        // Processar normalmente como seleção do menu
+        respostaChatbot = await this.processMenuSelection(mensagemDoUsuario, conversation);
       }
     }
     // FALLBACK: Estado desconhecido - volta ao menu
@@ -265,9 +266,8 @@ Sou seu assistente virtual e estou aqui para ajudá-lo(a). Como posso ajudá-lo 
 2. Agendar consulta
 3. Autorizar exame
 
-Digite o número da opção desejada ou 0 para voltar ao menu.
-
-ℹ️ Sua sessão será finalizada automaticamente após 10 minutos de inatividade.`;
+Digite o número da opção desejada.
+Digite 0 para voltar ao menu ou 9 para encerrar a conversa.`;
   }
 
   /**
@@ -280,9 +280,8 @@ Digite o número da opção desejada ou 0 para voltar ao menu.
 2. Agendar consulta
 3. Autorizar exame
 
-Digite o número da opção desejada ou 0 para voltar ao menu.
-
-ℹ️ Sua sessão será finalizada automaticamente após 10 minutos de inatividade.`;
+Digite o número da opção desejada.
+Digite 0 para voltar ao menu ou 9 para encerrar a conversa.`;
   }
 
   /**

@@ -24,7 +24,7 @@ export default function ChatBot({ conversationId, onClose, onConversationCreated
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
-  const [conversationStatus, setConversationStatus] = useState<'aberta' | 'inativa' | 'fechada'>('aberta')
+  const [conversationStatus, setConversationStatus] = useState<'aberta' | 'fechada'>('aberta')
   const [isAutorizacaoMode, setIsAutorizacaoMode] = useState(false)
   
   const userId = localStorage.getItem("idUser") || "user123"
