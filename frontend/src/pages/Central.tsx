@@ -169,6 +169,11 @@ export default function Central() {
         isHighContrast ? "bg-black text-white" : "bg-[#f7fdf9] text-black"
       } ${isLargeFont ? "text-lg" : "text-base"}`}
     >
+    <div
+      className={`min-h-screen flex flex-col ${
+        isHighContrast ? "bg-black text-white" : "bg-[#f7fdf9] text-black"
+      } ${isLargeFont ? "text-lg" : "text-base"}`}
+    >
       {/* Barra Superior */}
       <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm border-b border-green-200 relative">
         <img src="/logo.png" alt="Unimed logo" className="h-8" />

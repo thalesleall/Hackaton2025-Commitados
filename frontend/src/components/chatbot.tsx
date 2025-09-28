@@ -1,3 +1,8 @@
+import { useEffect, useState, useRef } from "react"
+import { Input } from "../components/ui/input"
+import { Button } from "../components/ui/button"
+import { ArrowLeft, Paperclip } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 // src/components/chatbot.tsx
 import { useEffect, useState } from "react"
 import { Input } from "./ui/input"
@@ -22,6 +27,21 @@ type Props = {
 export default function ChatBot({ conversationId, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const token = "10" // localStorage.getItem("authToken")
+    const userId = "10" // localStorage.getItem("idUser")
+    return
+    if (token || userId) {
+      navigate("/login")
+      return
+    }
+  }, [])
+
+  const handleSend = () => {
+    if (!input.trim()) return
   const [localConversationId, setLocalConversationId] = useState<string | null>(
     conversationId
   )
@@ -89,6 +109,20 @@ export default function ChatBot({ conversationId, onClose }: Props) {
     }
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0]
+      if (file.type === "application/pdf") {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "user", text: `📎 Enviou um arquivo: ${file.name}` }
+        ])
+      } else {
+        alert("Somente arquivos PDF são permitidos.")
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col w-full h-full bg-white rounded-2xl shadow-sm">
       {/* Cabeçalho */}
@@ -103,7 +137,6 @@ export default function ChatBot({ conversationId, onClose }: Props) {
             {localConversationId ? "Conversa" : "Nova Conversa"}
           </h2>
         </div>
-        <span className="text-xs text-gray-500">Beta</span>
       </div>
 
       {/* Histórico */}
@@ -122,6 +155,8 @@ export default function ChatBot({ conversationId, onClose }: Props) {
         ))}
       </div>
 
+      {/* Input fixo no rodapé */}
+      <div className="border-t p-3 flex gap-2 bg-white rounded-b-2xl items-center">
       {/* Input */}
       <div className="border-t p-3 flex gap-2 items-center bg-white rounded-b-2xl relative">
         <button
@@ -152,9 +187,27 @@ export default function ChatBot({ conversationId, onClose }: Props) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
+
+        {/* Botão de anexar arquivo */}
+        <Button
+          variant="outline"
+          className="border-green-600 text-green-700"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip className="w-5 h-5" />
+        </Button>
+        <input
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+        />
+
+        {/* Botão de enviar */}
         <Button
           onClick={handleSend}
-          className="bg-green-600 hover:bg-green-700"
+          className="bg-green-600 hover:bg-green-700 text-white"
         >
           Enviar
         </Button>
