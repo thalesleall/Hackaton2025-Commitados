@@ -1,5 +1,5 @@
 // src/pages/Central.tsx
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, ReactNode } from "react"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
 import { Card, CardContent } from "../components/ui/card"
@@ -9,6 +9,9 @@ import ChatBot from "../components/chatbot"
 import { Dropdown } from "../components/DropDown"
 import { CarregarConversas, CriarConversa } from "../service/api"
 
+/* ================================
+   Tipos
+================================ */
 type ChatListItem = {
   id: string
   nome: string
@@ -18,12 +21,68 @@ type ChatListItem = {
   msg: string
 }
 
+/* ================================
+   Modal fullscreen reutilizável
+================================ */
+function ModalFullscreen({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="bg-white w-full h-full p-6 flex flex-col"
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b pb-3">
+              <h2 className="text-xl font-semibold text-green-700">{title}</h2>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="flex-1 overflow-y-auto mt-4">{children}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+/* ================================
+   Página Central
+================================ */
 export default function Central() {
   const [search, setSearch] = useState("")
   const [showChat, setShowChat] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showAccessibility, setShowAccessibility] = useState(false)
   const [activeChat, setActiveChat] = useState<string | null>(null)
+
+  // Estados modais
+  const [openProfileModal, setOpenProfileModal] = useState(false)
+  const [openSettingsModal, setOpenSettingsModal] = useState(false)
 
   // Acessibilidade
   const [isLargeFont, setIsLargeFont] = useState(false)
@@ -48,15 +107,13 @@ export default function Central() {
         setLoading(true)
         setLoadError(null)
 
-        let data = await CarregarConversas(userId) // GET /api/chat/conversations/:userId
+        let data = await CarregarConversas(userId)
 
-        // Se não houver conversas, cria uma nova
         if (!Array.isArray(data) || data.length === 0) {
           const created = await CriarConversa(userId)
           data = [created]
         }
 
-        // Pega a última conversa
         const last = data[data.length - 1]
         const lastMsg = last.mensagens?.length
           ? last.mensagens[last.mensagens.length - 1]
@@ -68,11 +125,11 @@ export default function Central() {
           protocolo: `#${String(last.id).slice(0, 6)}`,
           canal: "Chat",
           status: "Atualizada recentemente",
-          msg: lastMsg?.texto || "Sem mensagens ainda."
+          msg: lastMsg?.texto || "Sem mensagens ainda.",
         }
 
         setItems([item])
-        setActiveChat(last.id) // mantém conversa ativa
+        setActiveChat(last.id)
       } catch (err: any) {
         console.error(err)
         setLoadError("Não foi possível carregar as conversas.")
@@ -86,9 +143,10 @@ export default function Central() {
 
   const filteredChats = useMemo(() => {
     const term = search.toLowerCase()
-    return items.filter(c =>
-      c.nome.toLowerCase().includes(term) ||
-      c.protocolo.toLowerCase().includes(term)
+    return items.filter(
+      (c) =>
+        c.nome.toLowerCase().includes(term) ||
+        c.protocolo.toLowerCase().includes(term)
     )
   }, [items, search])
 
@@ -115,7 +173,7 @@ export default function Central() {
       <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm border-b border-green-200 relative">
         <img src="/logo.png" alt="Unimed logo" className="h-8" />
         <div className="flex gap-6 items-center relative">
-          {/* Ícone Home */}
+          {/* Home */}
           <Home
             className="text-green-700 cursor-pointer"
             onClick={() => {
@@ -135,9 +193,33 @@ export default function Central() {
             />
             <Dropdown open={showProfile} onClose={() => setShowProfile(false)}>
               <ul className="flex flex-col gap-2">
-                <li className="cursor-pointer hover:text-green-700">Meu Perfil</li>
-                <li className="cursor-pointer hover:text-green-700">Configurações</li>
-                <li className="cursor-pointer text-red-600 hover:text-red-700">Sair</li>
+                <li
+                  className="cursor-pointer hover:text-green-700"
+                  onClick={() => {
+                    setOpenProfileModal(true)
+                    setShowProfile(false)
+                  }}
+                >
+                  Meu Perfil
+                </li>
+                <li
+                  className="cursor-pointer hover:text-green-700"
+                  onClick={() => {
+                    setOpenSettingsModal(true)
+                    setShowProfile(false)
+                  }}
+                >
+                  Configurações
+                </li>
+                <li
+                  className="cursor-pointer text-red-600 hover:text-red-700"
+                  onClick={() => {
+                    localStorage.clear()
+                    window.location.href = "/login"
+                  }}
+                >
+                  Sair
+                </li>
               </ul>
             </Dropdown>
           </div>
@@ -151,7 +233,10 @@ export default function Central() {
                 setShowProfile(false)
               }}
             />
-            <Dropdown open={showAccessibility} onClose={() => setShowAccessibility(false)}>
+            <Dropdown
+              open={showAccessibility}
+              onClose={() => setShowAccessibility(false)}
+            >
               <div className="flex flex-col gap-3">
                 <Button
                   variant="outline"
@@ -165,7 +250,9 @@ export default function Central() {
                   className="border-green-600 text-green-700"
                   onClick={() => setIsHighContrast(!isHighContrast)}
                 >
-                  {isHighContrast ? "Desativar Alto Contraste" : "Ativar Alto Contraste"}
+                  {isHighContrast
+                    ? "Desativar Alto Contraste"
+                    : "Ativar Alto Contraste"}
                 </Button>
               </div>
             </Dropdown>
@@ -173,6 +260,7 @@ export default function Central() {
         </div>
       </header>
 
+      {/* Conteúdo principal */}
       <main className="flex flex-1 p-6 gap-6 overflow-hidden min-h-0">
         {/* Sidebar */}
         <aside className="w-64 bg-white shadow-sm rounded-2xl p-4 flex flex-col gap-3 self-start">
@@ -187,7 +275,9 @@ export default function Central() {
             Fazer manualmente
           </Button>
 
-          {loading && <div className="text-xs text-gray-500">Carregando conversas…</div>}
+          {loading && (
+            <div className="text-xs text-gray-500">Carregando conversas…</div>
+          )}
           {loadError && <div className="text-xs text-red-600">{loadError}</div>}
         </aside>
 
@@ -216,7 +306,9 @@ export default function Central() {
                     <Card
                       key={chat.id}
                       className={`hover:shadow-md transition cursor-pointer ${
-                        activeChat === chat.id ? "border-l-4 border-orange-500" : ""
+                        activeChat === chat.id
+                          ? "border-l-4 border-orange-500"
+                          : ""
                       }`}
                       onClick={() => {
                         setActiveChat(chat.id)
@@ -252,7 +344,7 @@ export default function Central() {
                 </div>
               </motion.div>
             ) : (
-              // Área do Chat
+              // Chat
               <motion.div
                 key="chat"
                 initial={{ opacity: 0, x: 30 }}
@@ -262,10 +354,13 @@ export default function Central() {
                 className="flex-1 relative"
               >
                 {activeChat && (
-                  <ChatBot conversationId={activeChat} onClose={() => setShowChat(false)} />
+                  <ChatBot
+                    conversationId={activeChat}
+                    onClose={() => setShowChat(false)}
+                  />
                 )}
 
-                {/* Botão de anexar PDF */}
+                {/* Anexar PDF */}
                 <button
                   className="absolute left-4 bottom-4 w-10 h-10 rounded-full bg-white border shadow-sm hover:shadow-md flex items-center justify-center"
                   onClick={() => setAttachOpen(true)}
@@ -344,6 +439,41 @@ export default function Central() {
       <footer className="text-center py-3 text-xs text-gray-500 border-t border-green-200">
         © Projeto Hackathon — layout Verde Unimed
       </footer>
+
+      {/* Modais */}
+      <ModalFullscreen
+        open={openProfileModal}
+        onClose={() => setOpenProfileModal(false)}
+        title="Meu Perfil"
+      >
+        <p>Aqui você pode visualizar e editar informações do usuário.</p>
+        <p>
+          <strong>ID:</strong> {localStorage.getItem("idUser")}
+        </p>
+      </ModalFullscreen>
+
+      <ModalFullscreen
+        open={openSettingsModal}
+        onClose={() => setOpenSettingsModal(false)}
+        title="Configurações"
+      >
+        <div className="flex flex-col gap-3">
+          <Button
+            variant="outline"
+            className="border-green-600 text-green-700"
+            onClick={() => setIsLargeFont(!isLargeFont)}
+          >
+            {isLargeFont ? "Diminuir Fonte" : "Aumentar Fonte"}
+          </Button>
+          <Button
+            variant="outline"
+            className="border-green-600 text-green-700"
+            onClick={() => setIsHighContrast(!isHighContrast)}
+          >
+            {isHighContrast ? "Desativar Alto Contraste" : "Ativar Alto Contraste"}
+          </Button>
+        </div>
+      </ModalFullscreen>
     </div>
   )
 }
