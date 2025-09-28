@@ -1,12 +1,18 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+// src/pages/Login.tsx
 import { Mail, Lock } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import Logo from "../assets/logo.png"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { LoginUsuario } from "@/service/api"
+import { LoginUsuario } from "../service/api"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Button } from "../components/ui/button"
+import { Label } from "../components/ui/label"
+import { Input } from "../components/ui/input"
+import { LoginUsuario } from "../service/api"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Button } from "../components/ui/button"
+import { Label } from "../components/ui/label"
+import { Input } from "../components/ui/input"
 
 export default function Login() {
   const [email, setEmail] = useState<string>("")
@@ -34,14 +40,18 @@ export default function Login() {
     }
 
     try {
-      const response = await LoginUsuario(email, senha)
+      // Passando objeto { email, senha }
+      const response = await LoginUsuario({ email, senha })
 
-      if (response.data.user.id) {
-        localStorage.setItem("idUser", response.data.user.id )
-        localStorage.setItem("authToken", response.data.session.access_token )
-        navigate("/home")
+      if (response?.user?.id) {
+        // Salva dados no localStorage
+        localStorage.setItem("idUser", response.user.id)
+        localStorage.setItem("authToken", response.session.access_token)
+
+        // Redireciona para Central (chat)
+        navigate("/central")
       } else {
-        setErrorMessage(response.error.message || "Falha na autenticação.")
+        setErrorMessage(response.error?.message || "Falha na autenticação.")
       }
     } catch (err) {
       setErrorMessage("Erro inesperado. Tente novamente mais tarde.")
@@ -70,6 +80,7 @@ export default function Login() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Campo e-mail */}
               <div className="space-y-2">
                 <Label htmlFor="identifier" className="font-semibold text-sm">
                   E-mail
@@ -86,6 +97,7 @@ export default function Login() {
                 </div>
               </div>
 
+              {/* Campo senha */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="font-semibold text-sm">
                   Senha
@@ -103,6 +115,7 @@ export default function Login() {
                 </div>
               </div>
 
+              {/* Botão */}
               <Button
                 className="w-full h-11 rounded-xl font-bold bg-[#00A859] hover:bg-[#00924e]"
                 type="submit"
