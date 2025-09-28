@@ -1,0 +1,171 @@
+{
+  "base_conhecimento": {
+    "introducao": {
+      "descricao": "Processos de saúde: agendamento, dados, cobrança, documentos e auditoria.",
+      "objetivo": "Capacitar a IA para respostas precisas sobre processos e exceções."
+    },
+    "atores": {
+      "beneficiario": {
+        "descricao": "Paciente/cliente dos serviços de saúde.",
+        "funcoes": ["Usa os serviços", "Fornece dados corretos"],
+        "canais": ["App", "Site", "Telefone", "WhatsApp", "Presencial"],
+        "direitos_responsabilidades": ["CDC", "LGPD"],
+        "tipos": ["Titulares", "Dependentes", "Particulares"],
+        "cenarios_especiais": {
+          "cpf_perdido": "Validar com outro documento oficial.",
+          "menor_idade": "Exigir autorização do responsável legal."
+        },
+        "validacoes": [
+          {"campo": "CPF", "obrigatorio": true, "acao_se_invalido": "Pedir outro documento oficial."},
+          {"campo": "Documento do responsável", "obrigatorio": "Se menor de idade", "acao_se_invalido": "Pedir autorização legal."}
+        ]
+      },
+      "atendimento": {
+        "descricao": "Funcionário que processa solicitações e garante conformidade.",
+        "funcoes": ["Processa solicitações no CRM", "Fornece suporte e garante conformidade."],
+        "canais": ["Call center", "Recepção", "Administrativo"],
+        "protocolos": ["Empatia", "Profissionalismo", "Segurança da informação"],
+        "excecoes": {
+          "dados_conflitantes": "Solicitar comprovante adicional.",
+          "procedimentos_urgentes": "Priorizar conforme protocolo."
+        },
+        "validacoes": [
+          {"acao": "Conferir dados no CRM", "acao_se_invalido": "Solicitar comprovante adicional."}
+        ]
+      }
+    },
+    "processos": {
+      "agendamento_consultas": {
+        "subprocessos": ["Buscar Vaga", "Visualizar Vaga", "Reservar Horário", "Confirmar Dados", "Agendar Consulta"],
+        "regras": [
+          {"condicao": "Plano ativo e médico vago", "acao": "Agendar consulta."},
+          {"condicao": "Horário indisponível", "acao": "Sugerir alternativa."},
+          {"condicao": "Cancelamento", "acao": "Liberar vaga e registrar."},
+          {"condicao": "Reagendamento", "acao": "Buscar nova data e atualizar CRM."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Menor de idade", "acao": "Exigir autorização do responsável."},
+          {"condicao": "Médico indisponível", "acao": "Sugerir outro médico ou data."},
+          {"condicao": "Erro de sistema", "acao": "Registrar protocolo e notificar TI."}
+        ],
+        "exemplos": ["Médico indisponível → IA sugere nova data/especialista.", "Dependente menor → Exigir autorização do responsável."],
+        "dados_referencia": {"tempo_medio": {"app": "1-5 min", "contato_direto": "1-3 min"}, "campos_obrigatorios": ["Nome", "CPF", "Plano", "Especialidade", "Data/Hora"], "canais": ["App", "Telefone", "WhatsApp"]},
+        "validacoes": [
+          {"campo": "Nome/CPF", "obrigatorio": true, "acao_se_invalido": "Solicitar preenchimento."},
+          {"campo": "Data/Hora", "obrigatorio": true, "acao_se_invalido": "Solicitar data válida."}
+        ]
+      },
+      "atualizacao_dados": {
+        "subprocessos": ["Receber Dados", "Validar Informações", "Atualizar CRM", "Notificar Beneficiário"],
+        "regras": [
+          {"condicao": "Documento válido", "acao": "Atualizar CRM."},
+          {"condicao": "Documento inválido", "acao": "Solicitar correção."},
+          {"condicao": "Alteração crítica (ex: titularidade)", "acao": "Exigir comprovante adicional."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Telefone inválido", "acao": "Pedir contato alternativo."},
+          {"condicao": "Endereço incompleto", "acao": "Pedir complemento e atualizar planilha."}
+        ],
+        "exemplos": ["Endereço mudou → atualizar planilha.", "Telefone inválido → pedir outro contato."],
+        "dados_referencia": {"tempo_medio": "1-3 min", "canais": ["WhatsApp", "Formulário online", "Presencial"]},
+        "validacoes": [
+          {"campo": "Documento", "obrigatorio": true, "acao_se_invalido": "Pedir correção antes de atualizar."},
+          {"campo": "Telefone", "obrigatorio": true, "acao_se_invalido": "Pedir número alternativo."}
+        ]
+      },
+      "cobranca_servicos": {
+        "subprocessos": ["Receber Solicitação", "Registrar Atendimento", "Enviar Fatura", "Analisar Contestação", "Aplicar Desconto", "Registrar Pagamento"],
+        "regras": [
+          {"condicao": "Contestação de cobrança", "acao": "Solicitar comprovante."},
+          {"condicao": "Cobrança correta", "acao": "Registrar pagamento."},
+          {"condicao": "Desconto aplicável", "acao": "Recalcular valor."},
+          {"condicao": "Glosa recorrente", "acao": "Notificar auditoria."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Pagamento parcial", "acao": "Registrar saldo devedor no CRM."},
+          {"condicao": "Glosa incorreta", "acao": "Orientar a contatar auditoria."}
+        ],
+        "exemplos": ["Glosa incorreta → IA orienta a contatar auditoria.", "Pagamento parcial → registrar saldo devedor."],
+        "dados_referencia": {"formas_pagamento": ["Boleto", "Cartão", "Débito"], "canais": ["E-mail", "SMS", "Correio", "Presencial"], "legislacao": ["CDC"]},
+        "validacoes": [{"campo": "Comprovante de pagamento", "obrigatorio": "Se contestação", "acao_se_invalido": "Pedir novo comprovante."}]
+      },
+      "solicitacao_documentos": {
+        "subprocessos": ["Receber Solicitação", "Copiar Documentos", "Registrar Atendimento", "Fornecer Protocolo", "Validar Documentos"],
+        "regras": [
+          {"condicao": "Documento incompleto", "acao": "Solicitar complemento."},
+          {"condicao": "Solicitação registrada", "acao": "Emitir protocolo."},
+          {"condicao": "Prazo excedido", "acao": "Notificar beneficiário."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Documento ilegível", "acao": "Solicitar novo envio."},
+          {"condicao": "Documento alternativo aceito", "acao": "RG, CNH, passaporte."}
+        ],
+        "exemplos": ["Documento ilegível → pedir novo envio.", "Solicitação OK → emitir protocolo."],
+        "dados_referencia": {"planilha_controle": ["Nome", "Tipo", "Datas"], "canal": "Presencial", "observacoes": ["Confidencialidade de dados"]}
+      },
+      "impressao_boleto": {
+        "subprocessos": ["Acessar Plataforma", "Ir para Menu Financeiro", "Selecionar Mês", "Imprimir 2ª Via"],
+        "regras": [
+          {"condicao": "Login válido", "acao": "Liberar acesso financeiro."},
+          {"condicao": "Mês selecionado", "acao": "Gerar PDF do boleto."},
+          {"condicao": "Boleto gerado", "acao": "Registrar no histórico."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Boleto pago", "acao": "Exibir histórico de pagamento."},
+          {"condicao": "Erro de login", "acao": "Orientar recuperação de senha."}
+        ],
+        "dados_referencia": {"campos_obrigatorios": ["CPF", "Contrato", "Senha"], "canal": ["Site", "App"], "tempo_medio": "1 min"}
+      },
+      "auditoria_procedimentos": {
+        "subprocessos": ["Receber Solicitação", "Registrar Atendimento", "Analisar Cobertura", "Informar Beneficiário"],
+        "regras": [
+          {"condicao": "Sem cobertura", "acao": "Informar e registrar negativa."},
+          {"condicao": "Com cobertura e docs OK", "acao": "Aprovar."},
+          {"condicao": "Dúvida técnica", "acao": "Encaminhar para auditoria detalhada."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Procedimento urgente", "acao": "Emitir aprovação provisória."},
+          {"condicao": "Documentação incompleta", "acao": "Solicitar complemento."}
+        ],
+        "dados_referencia": {"codigo_tuss": "Obrigatório", "campos_obrigatorios": ["Nome", "CPF", "Plano", "Médico", "Código TUSS"], "canais": ["WhatsApp", "Presencial"]}
+      },
+      "troca_documentos": {
+        "subprocessos": ["Solicitar Documentos", "Imprimir e Assinar", "Registrar Atendimento", "Entregar Protocolo", "Verificar Documentos"],
+        "regras": [
+          {"condicao": "Documentos assinados", "acao": "Registrar no CRM."},
+          {"condicao": "Documentos incompletos", "acao": "Informar pendência."},
+          {"condicao": "Troca concluída", "acao": "Emitir protocolo de conclusão."}
+        ],
+        "fluxos_alternativos": [
+          {"condicao": "Documento perdido", "acao": "Aceitar declaração substituta temporária."},
+          {"condicao": "Assinatura inválida", "acao": "Pedir correção presencial."}
+        ],
+        "dados_referencia": {"tipos_documentos": ["Comprovante de residência", "ID", "CPF", "Carteirinha"], "canal": "Presencial", "observacoes": ["Segurança da informação"]}
+      }
+    },
+    "abrev_siglas": {
+      "CRM": "Customer Relationship Management",
+      "CPF": "Cadastro de Pessoa Física",
+      "LGPD": "Lei Geral de Proteção de Dados",
+      "ANS": "Agência Nacional de Saúde Suplementar",
+      "TUSS": "Terminologia Unificada de Saúde Suplementar",
+      "CDC": "Código de Defesa do Consumidor"
+    },
+    "glossario": {
+      "Coparticipacao": "Valor pago pelo beneficiário ao usar um serviço.",
+      "Glosa": "Recusa de pagamento de um item pela operadora.",
+      "Autorizacao": "Aprovação prévia para um procedimento.",
+      "Reembolso": "Devolução de valor pago pelo beneficiário.",
+      "Rede Credenciada": "Profissionais e hospitais conveniados."
+    },
+    "observacoes_ia": [
+      "Sempre validar dados obrigatórios antes de agir.",
+      "Seguir estritamente a LGPD e o CDC.",
+      "Para processos críticos: emitir protocolo e registrar no CRM.",
+      "Notificar beneficiário sobre o status (alterações, aprovações, negativas).",
+      "Se houver inconsistência de dados, priorizar a correção.",
+      "Sempre considerar exceções e fluxos alternativos.",
+      "Usar exemplos práticos nas explicações."
+    ]
+  }
+}   
